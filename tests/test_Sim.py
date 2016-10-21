@@ -44,7 +44,7 @@ class TestSim(unittest.TestCase):
         
        
     def tearDown(self):
-        self.my_qmca.dut.close()
+        self.dut.close()
         time.sleep(5)
         cocotb_compile_clean()
 
