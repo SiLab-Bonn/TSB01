@@ -3,11 +3,6 @@
 # Copyright (c) SILAB , Physics Institute of Bonn University
 # ------------------------------------------------------------
 #
-# SVN revision information:
-#  $Rev:: 8                     $:
-#  $Author:: themperek          $:
-#  $Date:: 2013-09-16 12:15:22 #$:
-#
 
 ---
 name    : TSB01 
@@ -26,7 +21,9 @@ hw_drivers:
     type      : GPAC
     interface : usb
     base_addr : 0x00000
-    
+    init:
+        no_calibration : False
+
   - name      : SPI_FADC
     type      : spi
     interface : usb

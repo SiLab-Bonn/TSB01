@@ -3,16 +3,13 @@
 # Copyright (c) SILAB , Physics Institute of Bonn University
 # ------------------------------------------------------------
 #
-# SVN revision information:
-#  $Rev:: 15                    $:
-#  $Author:: themperek          $:
-#  $Date:: 2013-09-18 10:25:20 #$:
-#
+
 
 from basil.dut import Dut
 import numpy as np
 import matplotlib.pyplot as plt
 import time, sys, os, string
+import logging
 
 class logger:
     def __init__(self, logfile="tsb01.log"):
@@ -37,7 +34,14 @@ class logger:
                 pass
 
 class tsb01(Dut):
-    def __init__(self, yaml="tsb01.yaml"):
+        
+    def __init__(self, yaml=None):
+    
+        if yaml==None:
+            yaml = os.path.dirname(os.path.abspath(__file__)) + os.sep + "tsb01.yaml"
+
+        logging.info("Loading configuration file from %s" % yaml)
+
         super(tsb01, self).__init__(yaml)
         self.l = logger()
         self.debug = 0

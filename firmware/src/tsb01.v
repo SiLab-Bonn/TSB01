@@ -3,10 +3,6 @@
  * Copyright (c) SILAB , Physics Institute of Bonn University 
  * ------------------------------------------------------------
  *
- * SVN revision information:
- *  $Rev:: 4                     $:
- *  $Author:: themperek          $: 
- *  $Date:: 2013-09-12 12:20:16 #$:
  */
  
 `timescale 1ps / 1ps
@@ -96,8 +92,6 @@ module tsb01 (
 
     assign DEBUG_D = 16'ha5a5;
 
-    wire BUS_RST;
-
     (* KEEP = "{TRUE}" *)
     wire BUS_CLK; 
     (* KEEP = "{TRUE}" *)
@@ -117,15 +111,14 @@ module tsb01 (
 	 //assign RX_LEMO[0]=LEMO_TRIGGER;
 	 //assign RX_LEMO[1]=LEMO_RESET;
 	 
-    OFDDRRSE OFDDRRSE_ADC_ENC_BUF (
-        .Q(TX[0]),      
-        .C0(ADC_ENC), .C1(~ADC_ENC),  
-        .CE(1'b1),    
-        .D0(1'b1), .D1(1'b0),
-        .R(1'b0), .S(1'b0)
+    ODDR OFDDRRSE_ADC_ENC_BUF(
+        .D1(1'b1), 
+        .D2(1'b0), 
+        .C(ADC_ENC), 
+        .CE(1'b1), 
+        .R(1'b0), .S(1'b0),
+        .Q(TX[0])
     );
-
-    reset_gen i_reset_gen(.CLK(BUS_CLK), .RST(BUS_RST));
 
     clk_gen i_clkgen(
          .CLKIN(FCLK_IN),
@@ -170,59 +163,66 @@ module tsb01 (
     localparam SEQ_GEN_BASEADDR = 16'h1000;                     // 0x1000
     localparam SEQ_GEN_HIGHADDR = SEQ_GEN_BASEADDR + 15 + 16384;// 0x500f
 	 
-
-
-
-    // -------  BUS SYGNALING  ------- //
     wire [15:0] BUS_ADD;
-    assign BUS_ADD = ADD - 16'h4000;
-    wire BUS_RD, BUS_WR;
-    assign BUS_RD = ~RD_B;
-    assign BUS_WR = ~WR_B;
+    wire BUS_RD, BUS_WR, BUS_RST;
     
+    // -------  BUS SYGNALING  ------- //
+    fx2_to_bus i_fx2_to_bus (
+        .ADD(ADD),
+        .RD_B(RD_B),
+        .WR_B(WR_B),
+
+        .BUS_CLK(BUS_CLK),
+        .BUS_ADD(BUS_ADD),
+        .BUS_RD(BUS_RD),
+        .BUS_WR(BUS_WR),
+        .CS_FPGA()
+    );
     
+    reset_gen i_reset_gen(.CLK(BUS_CLK), .RST(BUS_RST));
+
     // -------  USER MODULES  ------- //
     // external trigger
     // switch
     wire [7:0] NOT_CONNECTED;
     wire NEG_EDGE;
-	 wire PULSE_EX_TRIGGER;
-	 assign PULSE_EX_TRIGGER = NEG_EDGE ? ~LEMO_EX_TRIGGER : LEMO_EX_TRIGGER;
+	wire PULSE_EX_TRIGGER;
+	assign PULSE_EX_TRIGGER = NEG_EDGE ? ~LEMO_EX_TRIGGER : LEMO_EX_TRIGGER;
     gpio 
-#( 
-    .BASEADDR(GPIO_SW_BASEADDR),
-    .HIGHADDR(GPIO_SW_HIGHADDR),
-    .IO_WIDTH(8),
-    .IO_DIRECTION(8'hff)
-) i_gpio_sw (
-    .BUS_CLK(BUS_CLK),
-    .BUS_RST(BUS_RST),
-    .BUS_ADD(BUS_ADD),
-    .BUS_DATA(BUS_DATA),
-    .BUS_RD(BUS_RD),
-    .BUS_WR(BUS_WR),
-    .IO({NOT_CONNECTED,NEG_EDGE})
-);
+    #( 
+        .BASEADDR(GPIO_SW_BASEADDR),
+        .HIGHADDR(GPIO_SW_HIGHADDR),
+        .IO_WIDTH(8),
+        .IO_DIRECTION(8'hff)
+    ) i_gpio_sw (
+        .BUS_CLK(BUS_CLK),
+        .BUS_RST(BUS_RST),
+        .BUS_ADD(BUS_ADD),
+        .BUS_DATA(BUS_DATA),
+        .BUS_RD(BUS_RD),
+        .BUS_WR(BUS_WR),
+        .IO({NOT_CONNECTED,NEG_EDGE})
+    );
 
-   // trigger delay
-   wire SEQ_EXT_START;
-pulse_gen
-#( 
-    .BASEADDR(PULSE_DELAY_BASEADDR), 
-    .HIGHADDR(PULSE_DELAY_HIGHADDR)
-) i_pulse_gen_tdcgate (
-    .BUS_CLK(BUS_CLK),
-    .BUS_RST(BUS_RST),
-    .BUS_ADD(BUS_ADD),
-    .BUS_DATA(BUS_DATA),
-    .BUS_RD(BUS_RD),
-    .BUS_WR(BUS_WR),
+       // trigger delay
+       wire SEQ_EXT_START;
+    pulse_gen
+    #( 
+        .BASEADDR(PULSE_DELAY_BASEADDR), 
+        .HIGHADDR(PULSE_DELAY_HIGHADDR)
+    ) i_pulse_gen_tdcgate (
+        .BUS_CLK(BUS_CLK),
+        .BUS_RST(BUS_RST),
+        .BUS_ADD(BUS_ADD),
+        .BUS_DATA(BUS_DATA),
+        .BUS_RD(BUS_RD),
+        .BUS_WR(BUS_WR),
 
-    .PULSE_CLK(SPI_CLK),
-    .EXT_START(PULSE_EX_TRIGGER),
-    .PULSE(SEQ_EXT_START)
+        .PULSE_CLK(SPI_CLK),
+        .EXT_START(PULSE_EX_TRIGGER),
+        .PULSE(SEQ_EXT_START)
 
-);
+    );
     assign TX[2]=SEQ_EXT_START;
 
     

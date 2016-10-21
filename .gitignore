@@ -87,3 +87,9 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+tests/Makefile
+tests/results.xml
+tests/sim_build
+tests/*.vcd
+
