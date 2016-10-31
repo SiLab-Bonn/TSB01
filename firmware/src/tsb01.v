@@ -120,7 +120,7 @@ module tsb01 (
         .Q(TX[0])
     );
 
-    clk_gen i_clkgen(
+    clk_gen_tsb01 i_clkgen(
          .CLKIN(FCLK_IN),
          .BUS_CLK(BUS_CLK),
          .ADC_ENC(ADC_ENC),
@@ -129,10 +129,8 @@ module tsb01 (
          .LOCKED()
     );
 
-
     // -------  MODULE ADREESSES  ------- //
-    localparam SPI_ADC_BASEADDR = 16'h0000;                 // 0x0000
-    localparam SPI_ADC_HIGHADDR = SPI_ADC_BASEADDR + 15;    // 0x000f
+
     
     localparam FIFO_BASEADDR = 16'h0020;                    // 0x0020
     localparam FIFO_HIGHADDR = FIFO_BASEADDR + 15;          // 0x002f
@@ -157,8 +155,12 @@ module tsb01 (
     // external trigger
     localparam GPIO_SW_BASEADDR = 16'h0200;  // 0x0200
     localparam GPIO_SW_HIGHADDR = GPIO_SW_BASEADDR + 31; // 0x021f
+	 
     localparam PULSE_DELAY_BASEADDR = GPIO_SW_HIGHADDR+1;  // 0x0220
     localparam PULSE_DELAY_HIGHADDR = PULSE_DELAY_BASEADDR + 31; // 0x023f
+    
+    localparam SPI_ADC_BASEADDR = 16'h0300;                 // 0x0300
+    localparam SPI_ADC_HIGHADDR = SPI_ADC_BASEADDR + 16'h8f;    // 0x038f
     
     localparam SEQ_GEN_BASEADDR = 16'h1000;                     // 0x1000
     localparam SEQ_GEN_HIGHADDR = SEQ_GEN_BASEADDR + 15 + 16384;// 0x500f
@@ -184,10 +186,10 @@ module tsb01 (
     // -------  USER MODULES  ------- //
     // external trigger
     // switch
-    wire [7:0] NOT_CONNECTED;
+    wire [6:0] NOT_CONNECTED;
     wire NEG_EDGE;
-	wire PULSE_EX_TRIGGER;
-	assign PULSE_EX_TRIGGER = NEG_EDGE ? ~LEMO_EX_TRIGGER : LEMO_EX_TRIGGER;
+	 wire PULSE_EX_TRIGGER;
+	 assign PULSE_EX_TRIGGER = NEG_EDGE ? ~LEMO_EX_TRIGGER : LEMO_EX_TRIGGER;
     gpio 
     #( 
         .BASEADDR(GPIO_SW_BASEADDR),
@@ -205,7 +207,7 @@ module tsb01 (
     );
 
        // trigger delay
-       wire SEQ_EXT_START;
+    wire SEQ_EXT_START;
     pulse_gen
     #( 
         .BASEADDR(PULSE_DELAY_BASEADDR), 
@@ -225,18 +227,6 @@ module tsb01 (
     );
     assign TX[2]=SEQ_EXT_START;
 
-    wire CE_1HZ; // use for sequential logic
-    wire CLK_1HZ; // don't connect to clock input, only combinatorial logic
-    assign CE_1HZ = 1'b1;
-	 clock_divider #(
-            .DIVISOR(30)
-    ) i_clock_divisor_40MHz_to_1Hz (
-            .CLK(SPI_CLK),
-            .RESET(1'b0),
-            .CE(CE_1HZ),
-            .CLOCK(CLK_1HZ)
-    );
-	  
     wire ADC_EN;
     spi 
     #( 
@@ -251,8 +241,9 @@ module tsb01 (
         .BUS_DATA(BUS_DATA),
         .BUS_RD(BUS_RD),
         .BUS_WR(BUS_WR),
-
-        .SPI_CLK(CLK_1HZ),
+		  
+		.EXT_START(1'b0),
+        .SPI_CLK(SPI_CLK),
 
         .SCLK(ADC_SCLK),
         .SDI(ADC_SDI),
@@ -349,7 +340,7 @@ module tsb01 (
             .ADC_IN(ADC_IN[i]),
 
             .ADC_SYNC(ADC_SYNC[i]),
-            .ADC_TRIGGER(ADC_SYNC[i]),
+            .ADC_TRIGGER(1'b0),
 
             .BUS_CLK(BUS_CLK),
             .BUS_RST(BUS_RST),

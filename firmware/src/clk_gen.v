@@ -8,7 +8,7 @@
 `timescale 1ns / 1ps
 `default_nettype none
 
-module clk_gen(
+module clk_gen_tsb01(
     input CLKIN, // 48M
 	 
     output BUS_CLK, // BUS_CLK is 48M							output from 1. DCM
@@ -43,7 +43,7 @@ module clk_gen(
     assign ADC_ENC = CLKD10MHZ;
     //assign ADC_CLK = CLKFX_160FB; //CLK0_XU2_BUF
     //assign ADC_CLK = CLK0_XU2_BUF;
-    assign ADC_CLK = CLKOUT160;
+    assign ADC_CLK = CLKFX_160FB; //CLKOUT160;
 
     BUFG CLKFX_BUFG_INST (.I(CLKFX_BUF), .O(CLKOUTFX)); 
     BUFG CLKFB_BUFG_INST (.I(CLK0_BUF), .O(BUS_CLK));

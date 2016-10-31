@@ -13,6 +13,7 @@ import os
 import sys
 import time
 import sys
+import numpy as np
 
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) #../
 sys.path.append( root_dir + "/tsb01a" ) 
@@ -45,11 +46,27 @@ class TestSim(unittest.TestCase):
 #         self.dut.sel_all()
 
         self.dut.sel_one(row=10, col=25, howmuch=100)
-        
+            
+        for ch in ['fadc0_rx','fadc1_rx','fadc2_rx','fadc3_rx']:
+            self.dut[ch].reset()
+            self.dut[ch].set_delay(10)
+            self.dut[ch].set_data_count(10)
+            self.dut[ch].set_single_data(True)
+            self.dut[ch].set_en_trigger(False)
+            self.dut[ch].start()
+
         for _ in range(500):
             tmp = self.dut['OUTA2'].is_done()
 
-
+        data = self.dut['DATA_FIFO'].get_data() 
+        self.assertTrue(len(data) == 4*10)
+        
+        exp = [0]*10 + [0x20003fff]*10 + [0x40003fffL]*10 + [0x60000000L]*10 
+        self.assertTrue(data.tolist() == exp)
+        
+        self.assertTrue(self.dut['SPI_FADC'].get_data().tolist() == [3,0])
+        
+        
     def tearDown(self):
         self.dut.close()
         time.sleep(5)

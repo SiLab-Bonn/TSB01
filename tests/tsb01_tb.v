@@ -108,6 +108,7 @@ wire SRAM_WE_B;
 
 wire [3:0] ADC_DATA;
 wire ADC_ENC, ADC_DCO, ADC_FCO;
+wire ADC_SDI;
 
 tsb01 dut(
    
@@ -138,7 +139,13 @@ tsb01 dut(
     .ADC_FCO_P(ADC_FCO),
     .ADC_FCO_N(~ADC_FCO),
     .ADC_OUT_P(ADC_DATA),
-    .ADC_OUT_N(~ADC_DATA)
+    .ADC_OUT_N(~ADC_DATA),
+    
+    .ADC_CSN(),
+    .ADC_SCLK(),
+    .ADC_SDI(ADC_SDI),
+    .ADC_SDO(ADC_SDI)
+    
 );
 
 //SRAM Model
@@ -178,7 +185,7 @@ adc_ser_model i_adc_ser1(.CLK(ADC_DCO), .LOAD(adc_load), .DATA_IN(ADC_CH1), .DAT
 adc_ser_model i_adc_ser2(.CLK(ADC_DCO), .LOAD(adc_load), .DATA_IN(ADC_CH2), .DATA_OUT(ADC_DATA[2]));
 adc_ser_model i_adc_ser3(.CLK(ADC_DCO), .LOAD(adc_load), .DATA_IN(ADC_CH3), .DATA_OUT(ADC_DATA[3]));
 */
-assign ADC_DATA = 0;
+assign ADC_DATA = 4'b0110;
 
 initial begin
     $dumpfile("tsb01.vcd");

@@ -88,6 +88,10 @@ ENV/
 # Rope project settings
 .ropeproject
 
+/firmware/ise/*
+/firmware/src/*
+!tsb01.xise
+
 tests/Makefile
 tests/results.xml
 tests/sim_build
