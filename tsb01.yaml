@@ -13,8 +13,8 @@ transfer_layer:
       type  : SiUsb
       #board_id : 106
       init:
-          bit_file : "../firmware/ise/tsb01.bit"
-          avoid_download : True
+          bit_file : "./firmware/ise/tsb01.bit"
+          avoid_download : False
 
 hw_drivers:
   - name      : GPAC
@@ -71,7 +71,7 @@ hw_drivers:
     interface : usb
     base_addr : 0x10220
 
-  - name      : fadc_conf
+  - name      : FADC_CONF
     type      : FadcConf
     hw_driver : SPI_FADC
     

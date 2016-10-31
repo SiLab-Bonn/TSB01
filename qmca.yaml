@@ -1,0 +1,94 @@
+name    : qmca 
+version : 0.01
+
+transfer_layer:
+  - name  : USB
+    type  : SiUsb
+    init:
+        bit_file : ./firmware/ise/qmca.bit
+        avoid_download : True
+
+hw_drivers:
+  - name      : GPAC
+    type      : GPAC
+    interface : USB
+    base_addr : 0x00000
+    init:
+        no_calibration : False
+    
+  - name      : SPI_FADC
+    type      : spi
+    interface : USB
+    base_addr : 0x10000
+    mem_bytes : 2
+
+  - name      : GPIO_TH
+    type      : gpio
+    interface : USB
+    base_addr : 0x10100
+    size      : 16
+
+  - name      : fadc0_rx
+    type      : fadc_rx
+    interface : USB
+    base_addr : 0x10030
+
+  - name      : DATA_FIFO
+    type      : sram_fifo
+    interface : USB
+    base_addr : 0x10020
+    base_data_addr: 0x0001000000000000
+
+  - name      : FADC_CONF
+    type      : FadcConf
+    hw_driver : SPI_FADC
+
+registers:
+
+  - name        : VDD
+    type        : FunctionalRegister
+    hw_driver   : GPAC
+    arg_names   : [ value ]
+    arg_add     : { 'channel': 'PWR0'}
+
+  - name        : PWR1
+    type        : FunctionalRegister
+    hw_driver   : GPAC
+    arg_names   : [ value ]
+    arg_add     : { 'channel': 'PWR1'}
+
+  - name        : PWR2
+    type        : FunctionalRegister
+    hw_driver   : GPAC
+    arg_names   : [ value ]
+    arg_add     : { 'channel': 'PWR2'}
+
+  - name        : PWR3
+    type        : FunctionalRegister
+    hw_driver   : GPAC
+    arg_names   : [ value ]
+    arg_add     : { 'channel': 'PWR3'}
+
+  - name        : VSRC3
+    type        : FunctionalRegister
+    hw_driver   : GPAC
+    arg_names   : [ value ]
+    arg_add     : { 'channel': 'VSRC3'}
+    
+  - name        : VSRC2
+    type        : FunctionalRegister
+    hw_driver   : GPAC
+    arg_names   : [ value ]
+    arg_add     : { 'channel': 'VSRC2'}
+
+  - name        : TH
+    type        : StdRegister
+    hw_driver   : GPIO_TH
+    size        : 16
+    fields:
+      - name    : TH
+        size    : 14
+        offset  : 13
+      - name    : SEL_ADC_CH
+        size    : 2
+        offset  : 15

@@ -53,7 +53,6 @@ class tsb01(Dut):
         super(tsb01, self).init()
         self.power()
 
-
     def power(self, pwr_en=True, VDDA=1.5, VDD=1.5, RST_VOL=0.8, FADC_VREF=0.88, IBIAS_COLBUF=1, IBIAS_CHIPBUF=-10):
         self['VDDA'].set_current_limit(100, unit='mA')
         
@@ -133,7 +132,7 @@ class tsb01(Dut):
         self['SEQ']['RST_ROW_40'][t] = 0
         self['SEQ']['RST2_40'][t] = 0
         self['SEQ']['RST1_40'][t] = 0
-        self['SEQ']['ADC_SYNC'][t] = 1
+        self['SEQ']['ADC_SYNC'][t] = 0
         t = t + 1
         self['SEQ'].set_nested_start(t)
 
@@ -185,7 +184,7 @@ class tsb01(Dut):
         self['SEQ']['RST_ROW_40'][t] = 0
         self['SEQ']['RST2_40'][t] = 0
         self['SEQ']['RST1_40'][t] = 0
-        self['SEQ']['ADC_SYNC'][t] = 0
+        self['SEQ']['ADC_SYNC'][t] = 1
         t = t + 1
         self['SEQ']['RST_EN_COL'][t:t + reset] = 0
         self['SEQ']['CLK_COL'][t:t + reset] = 0
@@ -302,6 +301,7 @@ class tsb01(Dut):
         self['SEQ'].set_clk_divide(divide)
         self['SEQ'].set_repeat(repeat)
         self['SEQ'].write(t)
+        self['SEQ'].start()
         self.init_pulser(trig_delay=trig_delay)
 
         s = "sel_all exp:%d delay0:%d repeat:%d howmuch:%d reset:%d divide:%d" % (

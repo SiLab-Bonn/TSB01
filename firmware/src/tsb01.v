@@ -57,7 +57,7 @@ module tsb01 (
     output ADC_CSN,
     output ADC_SCLK,
     output ADC_SDI,
-    input ADC_SD0,
+    input ADC_SDO,
 
     //FADC
     output ADC_ENC_P,
@@ -122,7 +122,7 @@ module tsb01 (
 
     clk_gen i_clkgen(
          .CLKIN(FCLK_IN),
-         .CLKINBUF(BUS_CLK),
+         .BUS_CLK(BUS_CLK),
          .ADC_ENC(ADC_ENC),
          .ADC_CLK(ADC_CLK),
          .SPI_CLK(SPI_CLK),
@@ -225,7 +225,18 @@ module tsb01 (
     );
     assign TX[2]=SEQ_EXT_START;
 
-    
+    wire CE_1HZ; // use for sequential logic
+    wire CLK_1HZ; // don't connect to clock input, only combinatorial logic
+    assign CE_1HZ = 1'b1;
+	 clock_divider #(
+            .DIVISOR(30)
+    ) i_clock_divisor_40MHz_to_1Hz (
+            .CLK(SPI_CLK),
+            .RESET(1'b0),
+            .CE(CE_1HZ),
+            .CLOCK(CLK_1HZ)
+    );
+	  
     wire ADC_EN;
     spi 
     #( 
@@ -241,11 +252,11 @@ module tsb01 (
         .BUS_RD(BUS_RD),
         .BUS_WR(BUS_WR),
 
-        .SPI_CLK(SPI_CLK),
+        .SPI_CLK(CLK_1HZ),
 
         .SCLK(ADC_SCLK),
         .SDI(ADC_SDI),
-        .SDO(ADC_SD0),
+        .SDO(ADC_SDO),
         .SEN(ADC_EN),
         .SLD()
     );

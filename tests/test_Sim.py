@@ -22,7 +22,7 @@ import tsb01
 
 class TestSim(unittest.TestCase):
 
-            
+
     def setUp(self):
 
         cocotb_compile_and_run(
@@ -30,21 +30,28 @@ class TestSim(unittest.TestCase):
             sim_bus='basil.utils.sim.SiLibUsbBusDriver',
             include_dirs = (root_dir,)
             )
-                
+   
         with open(root_dir + '/tsb01a/tsb01.yaml', 'r') as f:
             cnfg = yaml.load(f)
-            
+
         cnfg['transfer_layer'][0]['type'] = 'SiSim'
         cnfg['hw_drivers'][0]['init']['no_calibration'] = True
-       
+
         self.dut = tsb01.tsb01(yaml=cnfg)
-       
+
+
     def test(self):
         self.dut.init()
+#         self.dut.sel_all()
+
+        self.dut.sel_one(row=10, col=25, howmuch=100)
         
-       
+        for _ in range(500):
+            tmp = self.dut['OUTA2'].is_done()
+
+
     def tearDown(self):
-        self.my_qmca.dut.close()
+        self.dut.close()
         time.sleep(5)
         cocotb_compile_clean()
 

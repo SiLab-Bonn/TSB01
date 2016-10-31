@@ -3,12 +3,6 @@
 # Copyright (c) SILAB , Physics Institute of Bonn University
 # ------------------------------------------------------------
 #
-# SVN revision information:
-#  $Rev:: 22                    $:
-#  $Author:: themperek          $:
-#  $Date:: 2013-10-03 23:58:18 #$:
-#
-
 #...............................................................................
 #  Constraints File - Xilinx UCF format
 #
@@ -154,7 +148,6 @@ NET "FD[1]" IOSTANDARD = LVCMOS33;
 NET "FD[1]" LOC = N9;
 NET "FD[0]" IOSTANDARD = LVCMOS33;
 NET "FD[0]" LOC = V11;
-
 
 
 # ------ LED -------------------------------------------------------
@@ -392,7 +385,7 @@ NET "SCL" LOC = D14;
 NET "ADC_SDI" LOC = G3 | IOSTANDARD = LVCMOS33;
 NET "ADC_SCLK" LOC = J1  | IOSTANDARD = LVCMOS33;
 NET "ADC_CSN" LOC = H4  | IOSTANDARD = LVCMOS33;
-NET "ADC_SD0" LOC = J2  | IOSTANDARD = LVCMOS33 | PULLUP;
+NET "ADC_SDO" LOC = J2  | IOSTANDARD = LVCMOS33 | PULLUP;
 
 NET "ADC_ENC_P"  LOC = B10 | IOSTANDARD = LVDS_25;
 NET "ADC_ENC_N"  LOC = A10 | IOSTANDARD = LVDS_25;
