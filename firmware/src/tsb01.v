@@ -4,10 +4,66 @@
  * ------------------------------------------------------------
  *
  */
+ //`default_nettype none
+ 
  
 `timescale 1ps / 1ps
  
-//`default_nettype none
+`include "clk_gen.v"
+
+`include "utils/bus_to_ip.v"
+ 
+`include "sram_fifo/sram_fifo_core.v"
+`include "sram_fifo/sram_fifo.v"
+
+`include "rrp_arbiter/rrp_arbiter.v"
+
+`include "utils/cdc_syncfifo.v"
+`include "utils/generic_fifo.v"
+`include "utils/cdc_pulse_sync.v"
+
+`include "utils/reset_gen.v"
+`include "utils/pulse_gen_rising.v"
+`include "utils/CG_MOD_pos.v"
+ 
+`include "spi/spi_core.v"
+`include "spi/spi.v"
+`include "spi/blk_mem_gen_8_to_1_2k.v"
+
+`include "gpio/gpio.v"
+
+`include "gpac_adc_rx/gpac_adc_iobuf.v"
+`include "gpac_adc_rx/gpac_adc_rx.v"
+`include "gpac_adc_rx/gpac_adc_rx_core.v"
+
+`include "utils/cdc_reset_sync.v"
+
+`include "utils/fx2_to_bus.v"
+
+`include "pulse_gen/pulse_gen.v"
+`include "pulse_gen/pulse_gen_core.v"
+
+`include "seq_gen/seq_gen.v"
+`include "seq_gen/seq_gen_core.v"
+`include "seq_gen/seq_gen_blk_mem_16x8196.v"
+
+
+`ifdef COCOTB_SIM //for simulation
+    `include "utils/RAMB16_S1_S2_sim.v"
+    `include "utils/ODDR_sim.v"
+    `include "utils/DCM_sim.v"
+    `include "utils/BUFG_sim.v"
+
+    `include "utils/RAMB16_S1_S9_sim.v"
+    `include "utils/IBUFDS_sim.v"
+    `include "utils/IBUFGDS_sim.v"
+    `include "utils/OBUFDS_sim.v"
+`else
+    //`include "utils/IDDR_s3.v"
+    `include "utils/ODDR_s3.v"
+`endif
+
+
 
 module tsb01 (
 
