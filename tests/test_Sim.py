@@ -29,7 +29,7 @@ class TestSim(unittest.TestCase):
         cocotb_compile_and_run(
             [root_dir + '/tests/tsb01_tb.v'], 
             sim_bus='basil.utils.sim.SiLibUsbBusDriver',
-            include_dirs = (root_dir,)
+            include_dirs = (root_dir + '/firmware/src',)
             )
    
         with open(root_dir + '/tsb01a/tsb01.yaml', 'r') as f:
