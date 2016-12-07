@@ -55,19 +55,19 @@ class tsb01(Dut):
 
     def power(self, pwr_en=True, VDDA=1.5, VDD=1.5, RST_VOL=0.8, FADC_VREF=0.88, IBIAS_COLBUF=1, IBIAS_CHIPBUF=-10):
         self['VDDA'].set_current_limit(100, unit='mA')
-        
+
         self['VDDA'].set_voltage(VDDA, unit='V')
         self['VDDA'].set_enable(pwr_en)
-        
+
         self['VDD'].set_voltage(VDD, unit='V')
         self['VDD'].set_enable(pwr_en)
 
         self['RST_VOL'].set_voltage(RST_VOL, unit='V')
         self['FADC_VREF'].set_voltage(FADC_VREF, unit='V')
-        
+
         self['IBIAS_COLBUF'].set_current(IBIAS_COLBUF, unit='uA')
         self['IBIAS_CHIPBUF'].set_current(IBIAS_CHIPBUF, unit='uA')
-        
+
         time.sleep(1)
         self.status()
 
@@ -82,15 +82,247 @@ class tsb01(Dut):
         self.l.append(s)
 
 
-    def sel_all(self, exp=100, delay0=10, repeat=1, howmuch=27998, reset=1, divide=4, trig_delay=10):  # 27898 data
-        self["PULSE_DELAY"].reset()
+    def sel_all(self, exp=1000, delay0=10, repeat=0, howmuch=27998, reset=10, divide=4, trig_delay=10):  # 27898 data
+#         self["PULSE_DELAY"].reset()
         self['SEQ'].reset()
         self['SEQ'].clear()
-        
-        # TODO: t = clock_cycle?
+
         t = 0
+
         self['SEQ'].set_repeat_start(t)
-        
+
+        self['SEQ']['RST_EN_COL'][t] = 0
+        self['SEQ']['CLK_COL'][t] = 0
+        self['SEQ']['RST_EN_20'][t] = 0
+        self['SEQ']['CLK_ROW_20'][t] = 0
+        self['SEQ']['RST_ROW_20'][t] = 0
+        self['SEQ']['RST2_20'][t] = 0
+        self['SEQ']['RST1_20'][t] = 0
+        self['SEQ']['RST_EN_40'][t] = 0
+        self['SEQ']['CLK_ROW_40'][t] = 0
+        self['SEQ']['RST_ROW_40'][t] = 0
+        self['SEQ']['RST2_40'][t] = 0
+        self['SEQ']['RST1_40'][t] = 0
+        self['SEQ']['ADC_SYNC'][t] = 0
+        t = t + 1  
+        # reset rows and select first row
+        self['SEQ']['RST_EN_COL'][t] = 0
+        self['SEQ']['CLK_COL'][t] = 0
+        self['SEQ']['RST_EN_20'][t] = 1
+        self['SEQ']['CLK_ROW_20'][t] = 0
+        self['SEQ']['RST_ROW_20'][t] = 0
+        self['SEQ']['RST2_20'][t] = 0
+        self['SEQ']['RST1_20'][t] = 0          
+        self['SEQ']['RST_EN_40'][t] = 1
+        self['SEQ']['CLK_ROW_40'][t] = 0
+        self['SEQ']['RST_ROW_40'][t] = 0
+        self['SEQ']['RST2_40'][t] = 0
+        self['SEQ']['RST1_40'][t] = 0
+        self['SEQ']['ADC_SYNC'][t] = 0
+        t = t + 1
+        self['SEQ']['RST_EN_COL'][t] = 0
+        self['SEQ']['CLK_COL'][t] = 0
+        self['SEQ']['RST_EN_20'][t] = 1
+        self['SEQ']['CLK_ROW_20'][t] = 1
+        self['SEQ']['RST_ROW_20'][t] = 0
+        self['SEQ']['RST2_20'][t] = 0
+        self['SEQ']['RST1_20'][t] = 0            
+        self['SEQ']['RST_EN_40'][t] = 1
+        self['SEQ']['CLK_ROW_40'][t] = 1
+        self['SEQ']['RST_ROW_40'][t] = 0
+        self['SEQ']['RST2_40'][t] = 0
+        self['SEQ']['RST1_40'][t] = 0
+        self['SEQ']['ADC_SYNC'][t] = 1
+        t = t + 1
+
+        # nested repeat = 96, loop over all rows
+        self['SEQ'].set_nested_start(t)
+
+        ### read data
+        # for actual row go through all columns
+        for j in range(48):
+            if j == 0:
+                colin = 1
+            else:
+                colin = 0
+            self['SEQ']['RST_EN_COL'][t] = colin
+            self['SEQ']['CLK_COL'][t] = 0
+            self['SEQ']['RST_EN_20'][t] = 0
+            self['SEQ']['CLK_ROW_20'][t] = 0
+            self['SEQ']['RST_ROW_20'][t] = 0
+            self['SEQ']['RST2_20'][t] = 0
+            self['SEQ']['RST1_20'][t] = 0
+            self['SEQ']['RST_EN_40'][t] = 0
+            self['SEQ']['CLK_ROW_40'][t] = 0
+            self['SEQ']['RST_ROW_40'][t] = 0
+            self['SEQ']['RST2_40'][t] = 0
+            self['SEQ']['RST1_40'][t] = 0
+            self['SEQ']['ADC_SYNC'][t] = 0
+            t = t + 1
+            self['SEQ']['RST_EN_COL'][t] = colin
+            self['SEQ']['CLK_COL'][t] = 1
+            self['SEQ']['RST_EN_20'][t] = 0
+            self['SEQ']['CLK_ROW_20'][t] = 0
+            self['SEQ']['RST_ROW_20'][t] = 0
+            self['SEQ']['RST2_20'][t] = 0
+            self['SEQ']['RST1_20'][t] = 0        
+            self['SEQ']['RST_EN_40'][t] = 0
+            self['SEQ']['CLK_ROW_40'][t] = 0
+            self['SEQ']['RST_ROW_40'][t] = 0
+            self['SEQ']['RST2_40'][t] = 0
+            self['SEQ']['RST1_40'][t] = 0
+            self['SEQ']['ADC_SYNC'][t] = 0
+            t = t + 1
+
+        # ## reset 
+        self['SEQ']['RST_EN_COL'][t] = 0
+        self['SEQ']['CLK_COL'][t] = 0
+        self['SEQ']['RST_EN_20'][t] = 0
+        self['SEQ']['CLK_ROW_20'][t] = 0
+        self['SEQ']['RST_ROW_20'][t] = 0
+        self['SEQ']['RST2_20'][t] = 0
+        self['SEQ']['RST1_20'][t] = 0
+        self['SEQ']['RST_EN_40'][t] = 0
+        self['SEQ']['CLK_ROW_40'][t] = 0
+        self['SEQ']['RST_ROW_40'][t] = 0
+        self['SEQ']['RST2_40'][t] = 0
+        self['SEQ']['RST1_40'][t] = 0
+        self['SEQ']['ADC_SYNC'][t] = 0
+        t = t + 1
+        self['SEQ']['RST_EN_COL'][t:t + reset] = 0
+        self['SEQ']['CLK_COL'][t:t + reset] = 0
+        self['SEQ']['RST_EN_20'][t:t + reset] = 0
+        self['SEQ']['CLK_ROW_20'][t:t + reset] = 0
+        self['SEQ']['RST_ROW_20'][t:t + reset] = 1
+        self['SEQ']['RST2_20'][t:t + reset] = 0
+        self['SEQ']['RST1_20'][t:t + reset] = 0   
+        self['SEQ']['RST_EN_40'][t:t + reset] = 0
+        self['SEQ']['CLK_ROW_40'][t:t + reset] = 0
+        self['SEQ']['RST_ROW_40'][t:t + reset] = 1
+        self['SEQ']['RST2_40'][t:t + reset] = 0
+        self['SEQ']['RST1_40'][t:t + reset] = 0
+        self['SEQ']['ADC_SYNC'][t:t + reset] = 0
+        t = t + reset
+        self['SEQ']['RST_EN_COL'][t:t + delay0] = 0
+        self['SEQ']['CLK_COL'][t:t + delay0] = 0
+        self['SEQ']['RST_EN_20'][t:t + delay0] = 0
+        self['SEQ']['CLK_ROW_20'][t:t + delay0] = 0
+        self['SEQ']['RST_ROW_20'][t:t + delay0] = 0
+        self['SEQ']['RST2_20'][t:t + delay0] = 0
+        self['SEQ']['RST1_20'][t:t + delay0] = 0
+        self['SEQ']['RST_EN_40'][t:t + delay0] = 0
+        self['SEQ']['CLK_ROW_40'][t:t + delay0] = 0
+        self['SEQ']['RST_ROW_40'][t:t + delay0] = 0
+        self['SEQ']['RST2_40'][t:t + delay0] = 0
+        self['SEQ']['RST1_40'][t:t + delay0] = 0
+        self['SEQ']['ADC_SYNC'][t:t + delay0] = 0        
+        t = t + delay0
+
+        # # read baseline
+        # go through all columns in actual row again
+        for j in range(48):
+            if j == 0:
+                colin = 1
+            else:
+                colin = 0
+            self['SEQ']['RST_EN_COL'][t] = colin
+            self['SEQ']['CLK_COL'][t] = 0
+            self['SEQ']['RST_EN_20'][t] = 0
+            self['SEQ']['CLK_ROW_20'][t] = 0
+            self['SEQ']['RST_ROW_20'][t] = 0
+            self['SEQ']['RST2_20'][t] = 0
+            self['SEQ']['RST1_20'][t] = 0
+            self['SEQ']['RST_EN_40'][t] = 0
+            self['SEQ']['CLK_ROW_40'][t] = 0
+            self['SEQ']['RST_ROW_40'][t] = 0
+            self['SEQ']['RST2_40'][t] = 0
+            self['SEQ']['RST1_40'][t] = 0
+            self['SEQ']['ADC_SYNC'][t] = 0
+            t = t + 1
+            self['SEQ']['RST_EN_COL'][t] = colin
+            self['SEQ']['CLK_COL'][t] = 1
+            self['SEQ']['RST_EN_20'][t] = 0
+            self['SEQ']['CLK_ROW_20'][t] = 0
+            self['SEQ']['RST_ROW_20'][t] = 0
+            self['SEQ']['RST2_20'][t] = 0
+            self['SEQ']['RST1_20'][t] = 0         
+            self['SEQ']['RST_EN_40'][t] = 0
+            self['SEQ']['CLK_ROW_40'][t] = 0
+            self['SEQ']['RST_ROW_40'][t] = 0
+            self['SEQ']['RST2_40'][t] = 0
+            self['SEQ']['RST1_40'][t] = 0
+            self['SEQ']['ADC_SYNC'][t] = 0
+            t = t + 1
+        # ## select next row
+        self['SEQ']['RST_EN_COL'][t] = 0
+        self['SEQ']['CLK_COL'][t] = 0
+        self['SEQ']['RST_EN_20'][t] = 0
+        self['SEQ']['CLK_ROW_20'][t] = 0
+        self['SEQ']['RST_ROW_20'][t] = 0
+        self['SEQ']['RST2_20'][t] = 0
+        self['SEQ']['RST1_20'][t] = 0          
+        self['SEQ']['RST_EN_40'][t] = 0
+        self['SEQ']['CLK_ROW_40'][t] = 0
+        self['SEQ']['RST_ROW_40'][t] = 0
+        self['SEQ']['RST2_40'][t] = 0
+        self['SEQ']['RST1_40'][t] = 0
+        self['SEQ']['ADC_SYNC'][t] = 0
+        t = t + 1
+        self['SEQ']['RST_EN_COL'][t] = 0
+        self['SEQ']['CLK_COL'][t] = 0
+        self['SEQ']['RST_EN_20'][t] = 0
+        self['SEQ']['CLK_ROW_20'][t] = 1
+        self['SEQ']['RST_ROW_20'][t] = 0
+        self['SEQ']['RST2_20'][t] = 0
+        self['SEQ']['RST1_20'][t] = 0            
+        self['SEQ']['RST_EN_40'][t] = 0
+        self['SEQ']['CLK_ROW_40'][t] = 1
+        self['SEQ']['RST_ROW_40'][t] = 0
+        self['SEQ']['RST2_40'][t] = 0
+        self['SEQ']['RST1_40'][t] = 0
+        self['SEQ']['ADC_SYNC'][t] = 0
+        t = t + 1
+        self['SEQ'].set_nested_stop(t)
+        ###########################     
+        self['SEQ']['RST_EN_COL'][t:] = 0
+        self['SEQ']['CLK_COL'][t:] = 0
+        self['SEQ']['RST_EN_20'][t:] = 0
+        self['SEQ']['CLK_ROW_20'][t:] = 0
+        self['SEQ']['RST_ROW_20'][t:] = 0
+        self['SEQ']['RST2_20'][t:] = 0
+        self['SEQ']['RST1_20'][t:] = 0   
+        self['SEQ']['RST_EN_40'][t:] = 0
+        self['SEQ']['CLK_ROW_40'][t:] = 0
+        self['SEQ']['RST_ROW_40'][t:] = 0
+        self['SEQ']['RST2_40'][t:] = 0
+        self['SEQ']['RST1_40'][t:] = 0
+        self['SEQ']['ADC_SYNC'][t:] = 0
+        self['SEQ'].set_wait(exp)
+        self.init_adc(howmuch=howmuch)
+#         self.start_adc()
+
+        t = t + 1
+        self['SEQ'].set_size(t)
+        self['SEQ'].set_nested_repeat(96)
+        self['SEQ'].set_clk_divide(divide)
+        self['SEQ'].set_repeat(repeat)
+        self['SEQ'].write(t)
+        self['SEQ'].start()
+        #self.init_pulser(trig_delay=trig_delay)
+
+        s = "sel_all exp:%d delay0:%d repeat:%d howmuch:%d reset:%d divide:%d" % (
+                exp, delay0, repeat, howmuch, reset, divide)
+        self.l.append(s)
+
+
+    def sel_flavor(self, col_start=0, col_stop=64, exp=100, delay0=10, repeat=0, howmuch=27998, reset=1, divide=4, trig_delay=10):
+        self['SEQ'].reset()
+        self['SEQ'].clear()
+
+        t = 0
+
+        self['SEQ'].set_repeat_start(t)
+
         self['SEQ']['RST_EN_COL'][t] = 0
         self['SEQ']['CLK_COL'][t] = 0
         self['SEQ']['RST_EN_20'][t] = 0
@@ -137,7 +369,7 @@ class tsb01(Dut):
         self['SEQ'].set_nested_start(t)
 
         # ## read data
-        for j in range(64):
+        for j in range(col_start, col_stop):
             if j == 0:
                 colin = 1
             else:
@@ -170,7 +402,7 @@ class tsb01(Dut):
             self['SEQ']['RST1_40'][t] = 0
             self['SEQ']['ADC_SYNC'][t] = 0
             t = t + 1
-            
+
         # ## reset 
         self['SEQ']['RST_EN_COL'][t] = 0
         self['SEQ']['CLK_COL'][t] = 0
@@ -216,7 +448,7 @@ class tsb01(Dut):
         t = t + delay0
         
         # # read baseline
-        for j in range(64):
+        for j in range(col_start, col_stop):
             if j == 0:
                 colin = 1
             else:
@@ -302,15 +534,12 @@ class tsb01(Dut):
         self['SEQ'].set_repeat(repeat)
         self['SEQ'].write(t)
         self['SEQ'].start()
-        self.init_pulser(trig_delay=trig_delay)
-
-        s = "sel_all exp:%d delay0:%d repeat:%d howmuch:%d reset:%d divide:%d" % (
-                exp, delay0, repeat, howmuch, reset, divide)
-        self.l.append(s)
 
 
     def sel_col(self, row=27, exp=100, delay0=10, repeat=0, howmuch=10000, reset=1, trig_delay=10):
 
+        t = 0
+        
         self['SEQ'].set_size(t)
         self['SEQ'].set_clk_divide(self.divide)
         self['SEQ'].set_repeat(repeat)
@@ -499,30 +728,51 @@ class tsb01(Dut):
     def init_adc(self, howmuch=10000):
         self['DATA_FIFO'].reset()
         self.howmuch = howmuch
+        self.nmdata_buffer = []
+
         for ch in ['OUTA1', 'OUTA2']:
             self[ch].reset()
             self[ch].set_data_count(howmuch)
             self[ch].set_align_to_sync(True)
+#             self[ch].set_en_trigger(True)
+            
+    def start_adc(self):
+#         self['DATA_FIFO'].reset()
+        for ch in ['OUTA1', 'OUTA2']:        
+            self[ch].start()
 
-        
-    def sel_all_get_adc(self, ext=True, timeout=1000):  # ## timeout[ms]
-        if ext == True:
-            self["PULSE_DELAY"].set_en(0)
+    def stop_adc(self):
         self['DATA_FIFO'].reset()
         for ch in ['OUTA1', 'OUTA2']:        
-        # for ch in ['OUTA2']:
-            self[ch].start()
-        if ext == True:
-            self["PULSE_DELAY"].set_en(1)
-        else:
-            self["PULSE_DELAY"].start()
+            self[ch].reset()
+
+        
+    def sel_all_get_adc(self, ext=True, timeout=1000):  ### timeout[ms]
+#         if ext == True:
+#             self["PULSE_DELAY"].set_en(0)
+#         self['DATA_FIFO'].reset()
+#         for ch in ['OUTA1', 'OUTA2']:        
+#         # for ch in ['OUTA2']:
+#             self[ch].start()
+#         if ext == True:
+#             self["PULSE_DELAY"].set_en(1)
+#         else:
+#             self["PULSE_DELAY"].start()
 
         # self[ch].set_data_count(1000000)
+        howmuch = self['OUTA1'].get_data_count()
+
 
         single = False
         nmdata = self['DATA_FIFO'].get_data()
+                
+        if len(self.nmdata_buffer) is not 0:
+            nmdata = np.append(self.nmdata_buffer)
+        
         i = 0
         while not (self['OUTA1'].is_done() and self['OUTA2'].is_done()):
+            if len(nmdata) >= howmuch:
+                break
             nmdata = np.append(nmdata, self['DATA_FIFO'].get_data())
         # while not (self['OUTA1'].is_done()):
         #    nmdata = np.append(nmdata, self['DATA_FIFO'].get_data())
@@ -532,14 +782,18 @@ class tsb01(Dut):
             else:
                 time.sleep(0.001)
         nmdata = np.append(nmdata, self['DATA_FIFO'].get_data())
+        
+        self.nmdata_buffer = nmdata[howmuch:]
+
+        return nmdata[:howmuch]
 
         # if(self.howmuch/2*2 != len(nmdata)):
             # print "Error: Data lost!", self.howmuch/2, len(nmdata)
-
+ 
         val1 = np.bitwise_and(nmdata, 0x00003fff)
         vals = np.right_shift(np.bitwise_and(nmdata, 0x10000000), 28)
         valc = np.right_shift(np.bitwise_and(nmdata, 0x60000000), 29)
-       
+        
         if(not single):
             val0 = np.right_shift(np.bitwise_and(nmdata, 0x0fffc000), 14)
             val1 = np.reshape(np.vstack((val0, val1)), -1, order='F')
@@ -562,26 +816,28 @@ class tsb01(Dut):
 
 
     def get_adc(self):
-        self['DATA_FIFO'].reset()
+        # self['DATA_FIFO'].reset()
         for ch in ['OUTA1', 'OUTA2']:        
-        # for ch in ['OUTA2']:
+#         # for ch in ['OUTA2']:
             self[ch].start()
-
-        # self[ch].set_data_count(1000000)
 
         single = False
         nmdata = self['DATA_FIFO'].get_data()
         i = 0
 
-        while not (self['OUTA1'].is_done() and self['OUTA2'].is_done()):
+#         print'DATA_FIFO', self['DATA_FIFO'].get_fifo_size()
+        
+        while not (self['OUTA1'].is_done() and self['OUTA2'].is_done() and self['DATA_FIFO'].get_fifo_size()==0):
+
             nmdata = np.append(nmdata, self['DATA_FIFO'].get_data())
         # while not (self['OUTA1'].is_done()):
         #    nmdata = np.append(nmdata, self['DATA_FIFO'].get_data())
             i = i + 1
             if i > 500:
                 time.sleep(0.001) # was 0.001            
-
-        nmdata = np.append(nmdata, self['DATA_FIFO'].get_data())
+        
+#         nmdata = np.append(nmdata, self['DATA_FIFO'].get_data())
+        
 
         # if(self.howmuch/2*2 != len(nmdata)):
             # print "Error: Data lost!", self.howmuch/2, len(nmdata)
@@ -593,7 +849,8 @@ class tsb01(Dut):
         if(not single):
             val0 = np.right_shift(np.bitwise_and(nmdata, 0x0fffc000), 14)
             val1 = np.reshape(np.vstack((val0, val1)), -1, order='F')
-            sync = np.reshape(np.vstack((vals, vals)), -1, order='F')
+            # unused variable sync
+#             sync = np.reshape(np.vstack((vals, vals)), -1, order='F')
             valc = np.reshape(np.vstack((valc, valc)), -1, order='F')
         # return val1
         val = np.empty([2, len(val1) / 2], dtype=np.int32)
@@ -622,7 +879,7 @@ class tsb01(Dut):
         jj = n % chunk
         if jj != 0:
             with open("dat%d.npy" % i + 1, "wb") as f:
-                np.save(f, t.get_adc())
+                np.save(f, self.get_adc())
 
 
     def img(self, n=10000):
