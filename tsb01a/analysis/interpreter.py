@@ -72,7 +72,7 @@ class Tsb01aInterpreter(object):
                     amplitudes = image["bl"] - image["sig"]
                     amplitudes = amplitudes.astype(np.int64)
 
-                    hits = _get_hit_info(amplitudes, 1, index)
+                    hits = _get_hit_info(amplitudes, threshold, index)
                     hits_rec = np.core.records.fromarrays(hits.transpose(),
                                                           names='event_number, frame, column, row, charge',
                                                           formats='<u8, <u1, <u2, <u2, <u4')
