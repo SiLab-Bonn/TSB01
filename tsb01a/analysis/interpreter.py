@@ -15,14 +15,14 @@ class Tsb01aInterpreter(object):
         self.row_n = row_n
         self.div = div
 
-    def interpret_data(self):
-        output_file = self.input_files[0][:-7] + "interpreted.h5"
+    def interpret_data(self, output_file):
+        # output_file = self.input_files[0][:-7] + "interpreted.h5"
 
         f_n = 12  # TODO make a better guess according to col_n,row_n,..etc
         f_nn = f_n - 1
         chunk_size = 1000
 
-        hit_dtype = np.dtype([("bl", "f8", (self.col_n, self.row_n)), ("sig", "f8", (self.col_n, self.row_n))])
+        hit_dtype = np.dtype([("bl", "i8", (self.col_n, self.row_n)), ("sig", "i8", (self.col_n, self.row_n))])
         hit = np.empty(f_nn * chunk_size, dtype=hit_dtype)
 
         with tb.open_file(output_file, "w") as out_file_h5:
@@ -55,12 +55,21 @@ class Tsb01aInterpreter(object):
                     pbar.finish()
 
     def create_hit_table(self, input_file, output_file, threshold=0):
-        hit_dtype = np.dtype([("event_number", "u8"), ("frame", "u1"), ("column", "u2"), ("row", "u2"), ("charge", "u4")])
+        hit_dtype = np.dtype([("event_number", "u8"), ("frame", "u1"), ("column", "u2"), ("row", "u2"), ("charge", "i2")])
         description = np.zeros((1,), dtype=hit_dtype).dtype
 
         logging.info("Start creating hit table")
 
+        chunk_size = 1000  # 6 kb per frame
+
         with tb.open_file(input_file, "r") as in_file_h5:
+            n_frames = in_file_h5.root.Images.shape[0]
+            pbar = progressbar.ProgressBar(widgets=['', progressbar.Percentage(), ' ',
+                                                    progressbar.Bar(marker='#', left='|', right='|'), ' ',
+                                                    progressbar.AdaptiveETA()],
+                                           maxval=n_frames, poll=10, term_width=80)
+            pbar.start()
+            start_event = 0
             with tb.open_file(output_file, "w") as out_file_h5:
                 hit_table = out_file_h5.create_table(out_file_h5.root,
                                                      name="Hits",
@@ -68,17 +77,25 @@ class Tsb01aInterpreter(object):
                                                      title="Hit data",
                                                      filters=tb.Filters(complib='blosc', complevel=5, fletcher32=False))
 
-                for index, image in enumerate(in_file_h5.root.Images[:]):
-                    amplitudes = image["bl"] - image["sig"]
-                    amplitudes = amplitudes.astype(np.int64)
+                n_pixel = in_file_h5.root.Images[0]["bl"].shape[0] * in_file_h5.root.Images[0]["bl"].shape[1]
+                max_hit_per_frame = chunk_size * n_pixel
+                hits = np.zeros(shape=(max_hit_per_frame, ), dtype=hit_dtype)
 
-                    hits = _get_hit_info(amplitudes, threshold, index)
-                    hits_rec = np.core.records.fromarrays(hits.transpose(),
-                                                          names='event_number, frame, column, row, charge',
-                                                          formats='<u8, <u1, <u2, <u2, <u4')
-                    hit_table.append(hits_rec)
+                for i in range(0, n_frames, chunk_size):
+                    pbar.update(i)
+                    data = in_file_h5.root.Images[i:i + chunk_size]
 
+                    max_index = _get_hit_info(hits, data, start_event, threshold, chunk_size)
+#                     print np.count_nonzero(hits['event_number'])
+#                     hits_rec = np.core.records.fromarrays(hits.transpose(),
+#                                                           names='event_number, frame, column, row, charge')#,
+#                                                           #formats=hit_dtype.
+#                                                           #'<u8, <u1, <u2, <u2, <i2')
+                    hit_table.append(hits[:max_index])
                     hit_table.flush()
+                start_event += i
+
+            pbar.finish()
 
         logging.info("Hit table created")
 
@@ -90,7 +107,13 @@ class Tsb01aInterpreter(object):
 def _mk_img(raw_array, res, col_n, row_n, div):
     n_rows = 12
     n_cols = col_n + 1
-    reset = 10
+    reset = 10#             col_i, row_i = col_indices[hit_index], row_indices[hit_index]
+#             hits['event_number'][hit_index] = index
+#             hits['frame'][hit_index] = frame
+#             # Col/row start at 1 by convention
+#             hits['column'][hit_index] = col_i + 1
+#             hits['row'][hit_index] = row_i + 1
+#             hits['charge'][hit_index] = amplitudes[col_i, row_i]
     delay = 10
     exp = 50
 
@@ -135,20 +158,31 @@ def _mk_img(raw_array, res, col_n, row_n, div):
 
 
 @njit
-def _get_hit_info(amplitudes, threshold, index):
-    hit_indices = np.where(amplitudes > threshold)
+def _get_hit_info(hits, data, start_event, threshold, chunk_size):
+    frame = 0  # No subframe info set to 0
+    n_hits = 0
+    hit_index = 0
 
-    col_indices, row_indices = hit_indices[0], hit_indices[1]
+    for index in range(chunk_size):
+        amplitudes = data[index]["bl"] - data[index]["sig"]
 
-    hits = np.zeros(shape=(len(col_indices), 5))
+        hit_indices = np.where(amplitudes > threshold)
+        col_indices, row_indices = hit_indices[0], hit_indices[1]
 
-    for hit_index in range(len(col_indices)):
-        col = col_indices[hit_index]
-        row = row_indices[hit_index]
-        charge = amplitudes[col, row]
-        hits[hit_index] = (index, 0, col, row, charge)
+        for i in range(len(col_indices)):
+            if hits.shape[0] <= hit_index:
+                raise IndexError('Hit array too small to store hits. Decrease chunk size or increase hit array size.')
+            col_i, row_i = col_indices[i], row_indices[i]
+            event_number = start_event + hit_index
+            hits[hit_index]['event_number'] = event_number
+            hits[hit_index]['frame'] = frame
+            # Col/row start at 1 by convention
+            hits[hit_index]['column'] = col_i
+            hits[hit_index]['row'] = row_i + 1
+            hits[hit_index]['charge'] = amplitudes[col_i, row_i]
+            hit_index = hit_index + 1
 
-    return hits
+    return hit_index
 
 
 if __name__ == "__main__":
