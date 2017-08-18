@@ -72,7 +72,7 @@ def mk_plot(fin,fout,col,row):
 if __name__=="__main__":
     import sys
     if len(sys.argv)<4:
-        print "mk_plot.py <fin> <col> <row> [th]"
+        print "plot_raw_data.py <fin> <col> <row> [th]"
         sys.exit()
     elif len(sys.argv)==5:
         th=int(sys.argv[4])

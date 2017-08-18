@@ -8,12 +8,13 @@ import progressbar
 device = tsb01.tsb01()
 device.init()
 
-#device.sel_one()
+device.sel_one()
 #device.init_adc(howmuch=100)
 
 device['OUTA1'].set_data_count(100)
 device['OUTA1'].set_single_data(True)
 device['OUTA1'].set_en_trigger(False)
+device['OUTA1'].set_align_to_sync(True)
 
 device['DATA_FIFO'].reset()
 

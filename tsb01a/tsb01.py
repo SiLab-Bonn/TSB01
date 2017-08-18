@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import time, sys, os, string
 import logging
 
+
 class logger:
     def __init__(self, logfile="tsb01.log"):
         self.logfile = logfile
@@ -32,10 +33,11 @@ class logger:
                 os.remove(self.logfile)
             except:
                 pass
+            
 
 class tsb01(Dut):
         
-    def __init__(self, yaml=None):
+    def __init__(self, yaml=None, channels=['OUTA1', 'OUTA2']):
     
         if yaml==None:
             yaml = os.path.dirname(os.path.abspath(__file__)) + os.sep + "tsb01.yaml"
@@ -43,10 +45,11 @@ class tsb01(Dut):
         logging.info("Loading configuration file from %s" % yaml)
 
         super(tsb01, self).__init__(yaml)
-        self.l = logger()
         self.debug = 0
         self.howmuch = 10000
         self.divide = 1
+        self.l = logger()
+        self.channels = channels 
 
 
     def init(self):
@@ -82,7 +85,10 @@ class tsb01(Dut):
         self.l.append(s)
 
 
-    def sel_all(self, exp=1000, delay0=10, repeat=0, howmuch=27998, reset=10, divide=4, trig_delay=10):  # 27898 data
+    def sel_all(self, exp=1000, delay0=14, repeat=0, howmuch=27998, reset=10, divide=4, trig_delay=10, size=(2, 2)):  # 27898 data
+        n_cols = size[0]
+        n_rows = size[1]
+        
 #         self["PULSE_DELAY"].reset()
         self['SEQ'].reset()
         self['SEQ'].clear()
@@ -120,6 +126,7 @@ class tsb01(Dut):
         self['SEQ']['RST1_40'][t] = 0
         self['SEQ']['ADC_SYNC'][t] = 0
         t = t + 1
+        
         self['SEQ']['RST_EN_COL'][t] = 0
         self['SEQ']['CLK_COL'][t] = 0
         self['SEQ']['RST_EN_20'][t] = 1
@@ -134,13 +141,27 @@ class tsb01(Dut):
         self['SEQ']['RST1_40'][t] = 0
         self['SEQ']['ADC_SYNC'][t] = 1
         t = t + 1
+#         self['SEQ']['RST_EN_COL'][t:t+5] = 0
+#         self['SEQ']['CLK_COL'][t:t+5] = 0
+#         self['SEQ']['RST_EN_20'][t:t+5] = 1
+#         self['SEQ']['CLK_ROW_20'][t:t+5] = 1
+#         self['SEQ']['RST_ROW_20'][t:t+5] = 0
+#         self['SEQ']['RST2_20'][t:t+5] = 0
+#         self['SEQ']['RST1_20'][t:t+5] = 0            
+#         self['SEQ']['RST_EN_40'][t:t+5] = 1
+#         self['SEQ']['CLK_ROW_40'][t:t+5] = 1
+#         self['SEQ']['RST_ROW_40'][t:t+5] = 0
+#         self['SEQ']['RST2_40'][t:t+5] = 0
+#         self['SEQ']['RST1_40'][t:t+5] = 0
+#         self['SEQ']['ADC_SYNC'][t:t+5] = 0
+#         t = t + 5
 
         # nested repeat = 96, loop over all rows
         self['SEQ'].set_nested_start(t)
 
         ### read data
         # for actual row go through all columns
-        for j in range(48):
+        for j in range(n_cols):
             if j == 0:
                 colin = 1
             else:
@@ -151,7 +172,7 @@ class tsb01(Dut):
             self['SEQ']['CLK_ROW_20'][t] = 0
             self['SEQ']['RST_ROW_20'][t] = 0
             self['SEQ']['RST2_20'][t] = 0
-            self['SEQ']['RST1_20'][t] = 0
+            self['SEQ']['RST1_20'][t] = 0        
             self['SEQ']['RST_EN_40'][t] = 0
             self['SEQ']['CLK_ROW_40'][t] = 0
             self['SEQ']['RST_ROW_40'][t] = 0
@@ -220,7 +241,7 @@ class tsb01(Dut):
 
         # # read baseline
         # go through all columns in actual row again
-        for j in range(48):
+        for j in range(n_cols):
             if j == 0:
                 colin = 1
             else:
@@ -303,11 +324,12 @@ class tsb01(Dut):
 
         t = t + 1
         self['SEQ'].set_size(t)
-        self['SEQ'].set_nested_repeat(96)
+        self['SEQ'].set_nested_repeat(n_rows)
         self['SEQ'].set_clk_divide(divide)
         self['SEQ'].set_repeat(repeat)
         self['SEQ'].write(t)
         self['SEQ'].start()
+
         #self.init_pulser(trig_delay=trig_delay)
 
         s = "sel_all exp:%d delay0:%d repeat:%d howmuch:%d reset:%d divide:%d" % (
@@ -730,20 +752,21 @@ class tsb01(Dut):
         self.howmuch = howmuch
         self.nmdata_buffer = []
 
-        for ch in ['OUTA1', 'OUTA2']:
+        for ch in self.channels:
             self[ch].reset()
+#             self[ch].set_single_data(True)
             self[ch].set_data_count(howmuch)
             self[ch].set_align_to_sync(True)
 #             self[ch].set_en_trigger(True)
             
     def start_adc(self):
 #         self['DATA_FIFO'].reset()
-        for ch in ['OUTA1', 'OUTA2']:        
+        for ch in self.channels:        
             self[ch].start()
 
     def stop_adc(self):
         self['DATA_FIFO'].reset()
-        for ch in ['OUTA1', 'OUTA2']:        
+        for ch in self.channels:        
             self[ch].reset()
 
         
@@ -816,32 +839,38 @@ class tsb01(Dut):
 
 
     def get_adc(self):
-        # self['DATA_FIFO'].reset()
-        for ch in ['OUTA1', 'OUTA2']:        
+        self['DATA_FIFO'].reset()
+        for ch in self.channels:        
 #         # for ch in ['OUTA2']:
             self[ch].start()
 
-        single = False
         nmdata = self['DATA_FIFO'].get_data()
         i = 0
 
 #         print'DATA_FIFO', self['DATA_FIFO'].get_fifo_size()
         
-        while not (self['OUTA1'].is_done() and self['OUTA2'].is_done() and self['DATA_FIFO'].get_fifo_size()==0):
+        while not (self['OUTA1'].is_done() and self['OUTA2'].is_done() and self['DATA_FIFO'].get_fifo_size() == 0):
 
             nmdata = np.append(nmdata, self['DATA_FIFO'].get_data())
         # while not (self['OUTA1'].is_done()):
         #    nmdata = np.append(nmdata, self['DATA_FIFO'].get_data())
             i = i + 1
+            if i % 1000 == 0:
+                print i, self['OUTA1'].is_done(), self['OUTA2'].is_done(), self['DATA_FIFO'].get_fifo_size()
             if i > 500:
-                time.sleep(0.001) # was 0.001            
+                time.sleep(0.001) # was 0.001
+            if i > 10000:
+                return [None, None]
         
 #         nmdata = np.append(nmdata, self['DATA_FIFO'].get_data())
         
-
+        return nmdata
+        
         # if(self.howmuch/2*2 != len(nmdata)):
             # print "Error: Data lost!", self.howmuch/2, len(nmdata)
-
+    def analyze_data(self, nmdata):
+        single = False
+        
         val1 = np.bitwise_and(nmdata, 0x00003fff)
         vals = np.right_shift(np.bitwise_and(nmdata, 0x10000000), 28)
         valc = np.right_shift(np.bitwise_and(nmdata, 0x60000000), 29)
