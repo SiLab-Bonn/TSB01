@@ -60,7 +60,7 @@ class Tsb01aInterpreter(object):
 
         logging.info("Start creating hit table")
 
-        chunk_size = 1000  # 6 kb per frame
+        chunk_size = 8000  # 6 kb per frame
 
         with tb.open_file(input_file, "r") as in_file_h5:
             n_frames = in_file_h5.root.Images.shape[0]
@@ -70,6 +70,8 @@ class Tsb01aInterpreter(object):
                                            maxval=n_frames, poll=10, term_width=80)
             pbar.start()
             start_event = 0
+            en = []
+
             with tb.open_file(output_file, "w") as out_file_h5:
                 hit_table = out_file_h5.create_table(out_file_h5.root,
                                                      name="Hits",
@@ -84,19 +86,13 @@ class Tsb01aInterpreter(object):
                 for i in range(0, n_frames, chunk_size):
                     pbar.update(i)
                     data = in_file_h5.root.Images[i:i + chunk_size]
-
-                    max_index = _get_hit_info(hits, data, start_event, threshold, chunk_size)
-#                     print np.count_nonzero(hits['event_number'])
-#                     hits_rec = np.core.records.fromarrays(hits.transpose(),
-#                                                           names='event_number, frame, column, row, charge')#,
-#                                                           #formats=hit_dtype.
-#                                                           #'<u8, <u1, <u2, <u2, <i2')
+                    en.append(start_event)
+                    max_index = _get_hit_info(hits, data, start_event, threshold)
                     hit_table.append(hits[:max_index])
                     hit_table.flush()
-                start_event += i
+                    start_event += chunk_size
 
-            pbar.finish()
-
+        pbar.finish()
         logging.info("Hit table created")
 
         return
@@ -158,26 +154,25 @@ def _mk_img(raw_array, res, col_n, row_n, div):
 
 
 @njit
-def _get_hit_info(hits, data, start_event, threshold, chunk_size):
+def _get_hit_info(hits, data, start_event, threshold):
     frame = 0  # No subframe info set to 0
-    n_hits = 0
     hit_index = 0
 
-    for index in range(chunk_size):
+    for index in range(data.shape[0]):
         amplitudes = data[index]["bl"] - data[index]["sig"]
 
         hit_indices = np.where(amplitudes > threshold)
         col_indices, row_indices = hit_indices[0], hit_indices[1]
+        event_number = start_event + index
 
         for i in range(len(col_indices)):
             if hits.shape[0] <= hit_index:
                 raise IndexError('Hit array too small to store hits. Decrease chunk size or increase hit array size.')
             col_i, row_i = col_indices[i], row_indices[i]
-            event_number = start_event + hit_index
             hits[hit_index]['event_number'] = event_number
             hits[hit_index]['frame'] = frame
             # Col/row start at 1 by convention
-            hits[hit_index]['column'] = col_i
+            hits[hit_index]['column'] = col_i + 1
             hits[hit_index]['row'] = row_i + 1
             hits[hit_index]['charge'] = amplitudes[col_i, row_i]
             hit_index = hit_index + 1
