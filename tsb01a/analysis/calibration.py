@@ -2,6 +2,8 @@ from __future__ import division
 
 import numpy as np
 import tables as tb
+import progressbar
+from numba import njit
 from scipy.optimize import curve_fit
 from matplotlib import pyplot as plt
 
@@ -108,6 +110,45 @@ def get_pixel_data_all(input_files, col, row):
 
     return hits[1:]
 
+@njit
+def hist_hits(hits, hist, n_pixel_x, n_pixel_y, max_charge):
+    for hit in hits:
+        col_i, row_i, charge_i = hit["column"] - 1, hit["row"] - 1, hit["charge"] - 1
+        if col_i >= n_pixel_x:
+            raise IndexError("Exceeding histogram size in x, please increase size.")
+        if row_i >= n_pixel_y:
+            raise IndexError("Exceeding histogram size in y, please increase size.")
+        if charge_i < max_charge:
+            hist[col_i, row_i, charge_i] =+ 1
+
+
+def histogram_hits(hit_file, output_file, n_pixel_x, n_pixel_y, max_charge=256, chunk_size=100000):
+    if max_charge > 2**8:
+        raise IndexError("Max enrties per bin should not exceed 256")
+    
+    with tb.open_file(hit_file, "r") as in_file_h5:
+        n_hits = in_file_h5.root.Hits.shape[0]
+        with tb.open_file(output_file, "w") as out_file_h5:
+            hit_hist = out_file_h5.create_carray(out_file_h5.root, name='HistHits', atom = tb.UInt16Atom(),
+                                                 shape=(n_pixel_x, n_pixel_y, max_charge),
+                                                 filters=tb.Filters(complib='blosc', complevel=5, fletcher32=False))
+            hit_hist[:] = 0
+            pbar = progressbar.ProgressBar(widgets=['', progressbar.Percentage(), ' ',
+                                                        progressbar.Bar(marker='#', left='|', right='|'), ' ',
+                                                        progressbar.AdaptiveETA()],
+                                               maxval=n_hits, poll=10, term_width=80)
+            pbar.start()
+            
+            hist = np.zeros(shape=(n_pixel_x, n_pixel_y, max_charge), dtype=np.uint8)
+    
+            for i in range(0, n_hits, chunk_size):
+                pbar.update(i)
+                hits = in_file_h5.root.Hits[i:i + chunk_size]
+                hist_hits(hits, hist, n_pixel_x, n_pixel_y, max_charge)
+            
+            hit_hist[:] = hist
+            
+            pbar.finish()
 
 def calibrate(input_file, n_cols, n_rows):
     hits = get_pixel_data(input_file)
