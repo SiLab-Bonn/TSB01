@@ -10,8 +10,8 @@ from matplotlib import pyplot as plt
 config = {'energy': 5898}
 
 
-def fit_spectrum(charge, show_plots=False, number=0):
-    hist, edges = np.histogram(charge, bins=np.arange(-15, 150, 1))
+def fit_spectrum(charge, show_plots=False, number=0, col=None, row=None):
+    hist, edges = np.histogram(charge, bins=np.arange(-25, 150, 1))
 
     def gauss(x, amp, mu, sigma):
         return amp * np.exp(- (x - mu) * (x - mu) / (2 * sigma * sigma))
@@ -23,10 +23,15 @@ def fit_spectrum(charge, show_plots=False, number=0):
     # fit_range_peak = signal_range[0] + np.where(signal == np.max(signal))[0][0]
     fit_range_peak = fit_range_pedestal + 4
 
+    peak_guess = edges[fit_range_peak] + np.where(np.amax(hist[fit_range_peak: fit_range_peak + 25]) == hist[fit_range_peak: fit_range_peak + 25])[0][0]
+
+    plt.clf()
+
     if show_plots:
         plt.clf()
 
-        plt.title(number)
+        if col or row:
+            plt.title("Column: %d // Row: %d" % (col, row))
         print('fit number %s' % number)
         plt.bar(edges[:-1], hist, width=1, fill=False, edgecolor='C0')
         plt.plot(edges[:-1], hist, 'C0.', label="Data")
@@ -40,9 +45,6 @@ def fit_spectrum(charge, show_plots=False, number=0):
         popt_pedestal, _ = curve_fit(gauss, edges[fit_range_pedestal - 8:fit_range_pedestal + 1],
                                      hist[fit_range_pedestal - 8:fit_range_pedestal + 1],
                                      p0=(np.amax(hist), edges[fit_range_pedestal], 2.))
-
-        peak_guess = edges[fit_range_peak] + np.where(np.amax(hist[fit_range_peak: fit_range_peak + 25]) == hist[fit_range_peak: fit_range_peak + 25])[0][0]
-        print peak_guess
 
         # fit peak
         popt_peak, _ = curve_fit(gauss,
@@ -65,12 +67,14 @@ def fit_spectrum(charge, show_plots=False, number=0):
 
             print np.abs(popt_peak[1] - popt_pedestal[1])
 
-            plt.show()
+#             plt.show()
+            plt.savefig("./output_plots/col_" + str(col).zfill(2) + "_row_" + str(row).zfill(2) + ".pdf")
 
             return np.abs(popt_peak[1] - popt_pedestal[1])
 
-    except:
-        print 'EXCEPTION'
+    except Exception as e:
+        print e
+
         plot_x = np.arange(-10, 150, 0.01)
         plt.plot(plot_x, gauss(plot_x, np.amax(hist), edges[fit_range_pedestal], 2.), 'C1', label="Pedestal Guess")
         plt.plot(plot_x, gauss(plot_x, np.amax(hist[fit_range_peak: fit_range_peak + 25]), peak_guess, 1.), 'C3', label="Peak Guess")
@@ -81,6 +85,7 @@ def fit_spectrum(charge, show_plots=False, number=0):
         plt.ylim(ymin=0.01)
 
         plt.show()
+#         plt.savefig("./output_plots/col_" + str(col).zfill(2) + "_row_" + str(row).zfill(2) + ".pdf")
         return np.abs(edges[fit_range_pedestal] - peak_guess)
 
     return np.abs(popt_peak[1] - popt_pedestal[1])
@@ -95,6 +100,20 @@ def get_pixel_data(input_file, col=None, row=None):
             return hits[selected_pixel]
         else:
             return hits
+
+
+def get_distance_map(input_file):
+    hits = get_pixel_data(input_file)
+    shape = (np.amax(hits["column"]), np.amax(hits["row"]))
+    distances = np.zeros(shape=(shape[1], shape[0]))
+    for col in range(shape[0]):
+        for row in range(shape[1]):
+            selection = np.where(np.logical_and(hits["column"] == col + 1, hits["row"] == row + 1))
+            charge = hits["charge"][selection]
+            # row before col to preserve matrix dimensions
+            distances[row, col] = fit_spectrum(charge, show_plots=False, col=col + 1, row=row + 1)
+
+    return distances
 
 
 def get_pixel_data_all(input_files, col, row):
@@ -124,31 +143,32 @@ def hist_hits(hits, hist, n_pixel_x, n_pixel_y, max_charge):
 
 def histogram_hits(hit_file, output_file, n_pixel_x, n_pixel_y, max_charge=256, chunk_size=100000):
     if max_charge > 2**8:
-        raise IndexError("Max enrties per bin should not exceed 256")
-    
+        raise IndexError("Max entries per bin should not exceed 256")
+
     with tb.open_file(hit_file, "r") as in_file_h5:
         n_hits = in_file_h5.root.Hits.shape[0]
         with tb.open_file(output_file, "w") as out_file_h5:
-            hit_hist = out_file_h5.create_carray(out_file_h5.root, name='HistHits', atom = tb.UInt16Atom(),
+            hit_hist = out_file_h5.create_carray(out_file_h5.root, name='HistHits', atom=tb.UInt16Atom(),
                                                  shape=(n_pixel_x, n_pixel_y, max_charge),
                                                  filters=tb.Filters(complib='blosc', complevel=5, fletcher32=False))
             hit_hist[:] = 0
             pbar = progressbar.ProgressBar(widgets=['', progressbar.Percentage(), ' ',
-                                                        progressbar.Bar(marker='#', left='|', right='|'), ' ',
-                                                        progressbar.AdaptiveETA()],
-                                               maxval=n_hits, poll=10, term_width=80)
+                                                    progressbar.Bar(marker='#', left='|', right='|'), ' ',
+                                                    progressbar.AdaptiveETA()],
+                                           maxval=n_hits, poll=10, term_width=80)
             pbar.start()
-            
+
             hist = np.zeros(shape=(n_pixel_x, n_pixel_y, max_charge), dtype=np.uint8)
-    
+
             for i in range(0, n_hits, chunk_size):
                 pbar.update(i)
                 hits = in_file_h5.root.Hits[i:i + chunk_size]
                 hist_hits(hits, hist, n_pixel_x, n_pixel_y, max_charge)
-            
+
             hit_hist[:] = hist
-            
+
             pbar.finish()
+
 
 def calibrate(input_file, n_cols, n_rows):
     hits = get_pixel_data(input_file)
