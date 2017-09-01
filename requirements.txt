@@ -1,0 +1,9 @@
+numpy  # fast math functions on c arrays 
+scipy  # equation solver backend and smoothing
+matplotlib  # plot library
+progressbar-latest  # show a progressbar
+tables
+bitarray
+nose
+pyzmq
+pyyaml
