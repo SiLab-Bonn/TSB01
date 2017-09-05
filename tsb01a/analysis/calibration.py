@@ -7,10 +7,8 @@ from numba import njit
 from scipy.optimize import curve_fit
 from matplotlib import pyplot as plt
 
-config = {'energy': 5898}
 
-
-def fit_spectrum(charge, show_plots=False, number=0, col=None, row=None):
+def fit_spectrum(charge, distance_guess=4, show_plots=False, number=0, col=None, row=None):
     hist, edges = np.histogram(charge, bins=np.arange(-25, 150, 1))
 
     def gauss(x, amp, mu, sigma):
@@ -21,9 +19,11 @@ def fit_spectrum(charge, show_plots=False, number=0, col=None, row=None):
 
     # search in range +/- 3 from guessed peak for maximum
     # fit_range_peak = signal_range[0] + np.where(signal == np.max(signal))[0][0]
-    fit_range_peak = fit_range_pedestal + 4
+    fit_range_peak = fit_range_pedestal + distance_guess
 
     peak_guess = edges[fit_range_peak] + np.where(np.amax(hist[fit_range_peak: fit_range_peak + 25]) == hist[fit_range_peak: fit_range_peak + 25])[0][0]
+
+    print peak_guess
 
     plt.clf()
 
@@ -48,9 +48,9 @@ def fit_spectrum(charge, show_plots=False, number=0, col=None, row=None):
 
         # fit peak
         popt_peak, _ = curve_fit(gauss,
-                                 edges[fit_range_peak:fit_range_peak + 25],
-                                 hist[fit_range_peak: fit_range_peak + 25],
-                                 p0=(np.amax(hist[fit_range_peak: fit_range_peak + 25]), peak_guess, 1.))
+                                 edges[fit_range_peak:fit_range_peak + 15],
+                                 hist[fit_range_peak: fit_range_peak + 15],
+                                 p0=(np.amax(hist[fit_range_peak - 1: fit_range_peak + 15]), peak_guess, 1.))
 
         if show_plots:
             plot_x = np.arange(-10, 150, 0.01)
@@ -60,15 +60,15 @@ def fit_spectrum(charge, show_plots=False, number=0, col=None, row=None):
             plt.plot(plot_x, gauss(plot_x, *popt_pedestal), 'C1', label="Pedestal Fit")
             plt.plot(plot_x, gauss(plot_x, *popt_peak), 'C3', label="Peak fit")
             plt.legend()
-            plt.ylim(0, 10000)
-            plt.xlim(-5, 20)
+            plt.ylim(0, 2000)
+            plt.xlim(-10, 30)
             # plt.yscale('log')
             plt.ylim(ymin=0.01)
 
             print np.abs(popt_peak[1] - popt_pedestal[1])
 
 #             plt.show()
-            plt.savefig("./output_plots/col_" + str(col).zfill(2) + "_row_" + str(row).zfill(2) + ".pdf")
+            plt.savefig("./output_plots_fe/col_" + str(col).zfill(2) + "_row_" + str(row).zfill(2) + ".pdf")
 
             return np.abs(popt_peak[1] - popt_pedestal[1])
 
@@ -79,8 +79,8 @@ def fit_spectrum(charge, show_plots=False, number=0, col=None, row=None):
         plt.plot(plot_x, gauss(plot_x, np.amax(hist), edges[fit_range_pedestal], 2.), 'C1', label="Pedestal Guess")
         plt.plot(plot_x, gauss(plot_x, np.amax(hist[fit_range_peak: fit_range_peak + 25]), peak_guess, 1.), 'C3', label="Peak Guess")
         plt.legend()
-        plt.ylim(0, 10000)
-        plt.xlim(-5, 20)
+        plt.ylim(0, 2000)
+        plt.xlim(-10, 30)
         # plt.yscale('log')
         plt.ylim(ymin=0.01)
 
@@ -91,43 +91,82 @@ def fit_spectrum(charge, show_plots=False, number=0, col=None, row=None):
     return np.abs(popt_peak[1] - popt_pedestal[1])
 
 
-def get_pixel_data(input_file, col=None, row=None):
-    with tb.open_file(input_file) as in_file_h5:
-        hits = in_file_h5.root.Hits[:]
-        if col or row:
-            selected_pixel = np.where(np.logical_and(hits["column"] == col, hits["row"] == row))[0]
-
-            return hits[selected_pixel]
-        else:
-            return hits
-
-
-def get_distance_map(input_file):
-    hits = get_pixel_data(input_file)
-    shape = (np.amax(hits["column"]), np.amax(hits["row"]))
+def get_distance_map(input_file, show_plots=False, distance_guess=4):
+    hits = _get_pixel_data(input_file)
+    hits = hits[hits["column"] > 16]
+    shape = (len(np.unique(hits["column"])), len(np.unique(hits["row"])))
     distances = np.zeros(shape=(shape[1], shape[0]))
     for col in range(shape[0]):
         for row in range(shape[1]):
-            selection = np.where(np.logical_and(hits["column"] == col + 1, hits["row"] == row + 1))
+            selection = np.where(np.logical_and(hits["column"] == col + 1 + 16, hits["row"] == row + 1))
             charge = hits["charge"][selection]
             # row before col to preserve matrix dimensions
-            distances[row, col] = fit_spectrum(charge, show_plots=False, col=col + 1, row=row + 1)
+            distances[row, col] = fit_spectrum(charge, distance_guess, show_plots=show_plots, col=col + 1 + 16, row=row + 1)
+
+    with tb.open_file(input_file[:-7] + 'calibration_fe.h5', 'w') as out_file:
+        out_file.create_array(out_file.root, 'calibration', distances, "Calibration data for Fe")
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(distances, interpolation='nearest', aspect='equal')
+    ax.set_title('Difference between signal and Noise')
+    fig.colorbar(im)    # scale of vertical bar
+    plt.show()
 
     return distances
 
 
-def get_pixel_data_all(input_files, col, row):
-    hit_dtype = np.dtype([("event_number", "u8"), ("frame", "u1"), ("column", "u2"), ("row", "u2"), ("charge", "i4")])
-    all_hits = np.zeros((1,), dtype=hit_dtype)
+def create_calibration(calibration_list, energies, show_plots=False):
+    def line(x, m, b):
+        return m * x + b
 
-    for input_file in input_files:
-        with tb.open_file(input_file) as in_file_h5:
-            hits = in_file_h5.root.Hits[:]
-            # selected_pixel = np.where(np.logical_and(hits["column"] == col, hits["row"] == row))[0]
-            # all_hits = np.append(all_hits, hits[selected_pixel])
-            all_hits = np.append(all_hits, hits)
+    with tb.open_file(calibration_list[0], 'r') as in_file:
+        data = in_file.root.calibration[:]
 
-    return hits[1:]
+    slope, offset = np.ones(shape=data.shape), np.zeros(shape=data.shape)
+    print slope.shape
+    data = np.zeros(shape=(len(calibration_list), data.shape[0], data.shape[1]))
+    # start plotting here
+    for index in range(len(calibration_list)):
+        with tb.open_file(calibration_list[index], 'r') as in_file:
+            data[index, :, :] = in_file.root.calibration[:]
+
+    for col in range(data.shape[2]):
+        for row in range(data.shape[1]):
+            adc_u = data[:, row, col]
+
+            popt, _ = curve_fit(line, adc_u, energies, p0=((energies[-1] - energies[0]) / (adc_u[-1] - adc_u[0]), 0.))
+            if show_plots:
+                plt.clf()
+                plt.title('Col %d / Row %d' % (col + 1, row + 1))
+                plt.plot(adc_u, energies, 'bo')
+                plt.plot(np.linspace(0, 25, 5), line(np.linspace(0, 25, 5), *popt), 'r--', label="Fit")
+                plt.show()
+            # row before col to preserve matrix dimensions
+            slope[row, col], offset[row, col] = popt[0], popt[1]
+
+    with tb.open_file('/media/tsb01a_data/x-ray-tube/calibration.h5', 'w') as out_file:
+        out_file.create_array(out_file.root, 'slope', slope, "Slope data for calibration")
+        out_file.create_array(out_file.root, 'offset', offset, "Offset data for calibration")
+
+    return slope, offset
+
+
+def apply_calibration(charge, calibration_file):
+    def line(x, m, b):
+        return x * m + b
+
+    # Convert hit file to 2d array
+
+    with tb.open_file(calibration_file, 'r') as in_file:
+        slope = in_file.root.slope[:]
+        offset = in_file.root.offset[:]
+
+        print offset
+
+        calibrated = line(charge, slope, offset)
+
+        print calibrated
+
 
 @njit
 def hist_hits(hits, hist, n_pixel_x, n_pixel_y, max_charge):
@@ -138,7 +177,7 @@ def hist_hits(hits, hist, n_pixel_x, n_pixel_y, max_charge):
         if row_i >= n_pixel_y:
             raise IndexError("Exceeding histogram size in y, please increase size.")
         if charge_i < max_charge:
-            hist[col_i, row_i, charge_i] =+ 1
+            hist[col_i, row_i, charge_i] = + 1
 
 
 def histogram_hits(hit_file, output_file, n_pixel_x, n_pixel_y, max_charge=256, chunk_size=100000):
@@ -170,23 +209,13 @@ def histogram_hits(hit_file, output_file, n_pixel_x, n_pixel_y, max_charge=256, 
             pbar.finish()
 
 
-def calibrate(input_file, n_cols, n_rows):
-    hits = get_pixel_data(input_file)
-    output_file = input_file[:-3] + 'calibrated.h5'
-    number = 1
+# Only meant to be called from other calibration functions
+def _get_pixel_data(input_file, col=None, row=None):
+    with tb.open_file(input_file) as in_file_h5:
+        hits = in_file_h5.root.Hits[:]
+        if col or row:
+            selected_pixel = np.where(np.logical_and(hits["column"] == col, hits["row"] == row))[0]
 
-    for index, _ in np.ndenumerate(np.empty(shape=(n_cols, n_rows))):
-        charge = hits[np.where(np.logical_and(hits["column"] == index[0], hits["row"] == index[1]))[0]]["charge"]
-        adc_distance = fit_spectrum(charge, True, number)
-        charge = charge * 1. / adc_distance * config["energy"]
-        hits[np.where(np.logical_and(hits["column"] == index[0], hits["row"] == index[1]))[0]]["charge"] = charge
-        number += 1
-
-    with tb.open_file(output_file, "w") as out_file_h5:
-        with tb.open_file(input_file, "r") as in_file_h5:
-            hit_table = out_file_h5.create_table(out_file_h5.root,
-                                                 name="Hits calibrated",
-                                                 description=in_file_h5.description,
-                                                 title="Hit data",
-                                                 filters=tb.Filters(complib='blosc', complevel=5, fletcher32=False))
-            hit_table.append(hits)
+            return hits[selected_pixel]
+        else:
+            return hits
