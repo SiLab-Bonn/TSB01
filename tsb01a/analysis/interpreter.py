@@ -54,7 +54,7 @@ class Tsb01aInterpreter(object):
                         pbar.update(slice_end)
                     pbar.finish()
 
-    def create_hit_table(self, input_file, output_file, threshold=0):
+    def create_hit_table(self, input_file, output_file, threshold=0, calibrate=False, calibration_file=None):
         hit_dtype = np.dtype([("event_number", "u8"), ("frame", "u1"), ("column", "u2"), ("row", "u2"), ("charge", "i2")])
         description = np.zeros((1,), dtype=hit_dtype).dtype
 
@@ -83,11 +83,20 @@ class Tsb01aInterpreter(object):
                 max_hit_per_frame = chunk_size * n_pixel
                 hits = np.zeros(shape=(max_hit_per_frame, ), dtype=hit_dtype)
 
+                if calibrate:
+                    with tb.open_file(calibration_file, 'r') as in_file:
+                        slope = np.transpose(in_file.root.slope[:])
+                        offset = np.transpose(in_file.root.offset[:])
+                else:
+                    slope, offset = np.ones_like(in_file_h5.root.Images[0]["bl"]), np.zeros_like(in_file_h5.root.Images[0]["bl"])
+
+                print slope, offset
+
                 for i in range(0, n_frames, chunk_size):
                     pbar.update(i)
                     data = in_file_h5.root.Images[i:i + chunk_size]
                     en.append(start_event)
-                    max_index = _get_hit_info(hits, data, start_event, threshold)
+                    max_index = _get_hit_info(hits, data, start_event, threshold, slope, offset)
                     hit_table.append(hits[:max_index])
                     hit_table.flush()
                     start_event += chunk_size
@@ -154,7 +163,7 @@ def _mk_img(raw_array, res, col_n, row_n, div):
 
 
 @njit
-def _get_hit_info(hits, data, start_event, threshold):
+def _get_hit_info(hits, data, start_event, threshold, slope, offset):
     frame = 0  # No subframe info set to 0
     hit_index = 0
 
@@ -174,7 +183,7 @@ def _get_hit_info(hits, data, start_event, threshold):
             # Col/row start at 1 by convention
             hits[hit_index]['column'] = col_i + 1
             hits[hit_index]['row'] = row_i + 1
-            hits[hit_index]['charge'] = amplitudes[col_i, row_i]
+            hits[hit_index]['charge'] = slope[col_i, row_i] * amplitudes[col_i, row_i] + offset[col_i, row_i]
             hit_index = hit_index + 1
 
     return hit_index
