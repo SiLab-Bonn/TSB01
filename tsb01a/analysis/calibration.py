@@ -44,7 +44,7 @@ def fit_spectrum(charge, distance_guess=4, show_plots=False, number=0, col=None,
         # fit pedestal
         popt_pedestal, _ = curve_fit(gauss, edges[fit_range_pedestal - 8:fit_range_pedestal + 1],
                                      hist[fit_range_pedestal - 8:fit_range_pedestal + 1],
-                                     p0=(np.amax(hist), edges[fit_range_pedestal], 2.))
+                                     p0=(np.amax(hist), edges[fit_range_pedestal], 1.))
 
         # fit peak
         popt_peak, _ = curve_fit(gauss,
@@ -65,18 +65,18 @@ def fit_spectrum(charge, distance_guess=4, show_plots=False, number=0, col=None,
             # plt.yscale('log')
             plt.ylim(ymin=0.01)
 
-            print np.abs(popt_peak[1] - popt_pedestal[1])
+            print np.abs(popt_peak[1])
 
-#             plt.show()
-            plt.savefig("./output_plots_fe/col_" + str(col).zfill(2) + "_row_" + str(row).zfill(2) + ".pdf")
+            plt.show()
+#             plt.savefig("./output_plots_cu/col_" + str(col).zfill(2) + "_row_" + str(row).zfill(2) + ".pdf")
 
-            return np.abs(popt_peak[1] - popt_pedestal[1])
+            return np.abs(popt_peak[1])
 
     except Exception as e:
         print e
 
         plot_x = np.arange(-10, 150, 0.01)
-        plt.plot(plot_x, gauss(plot_x, np.amax(hist), edges[fit_range_pedestal], 2.), 'C1', label="Pedestal Guess")
+        plt.plot(plot_x, gauss(plot_x, np.amax(hist), edges[fit_range_pedestal], 1.), 'C1', label="Pedestal Guess")
         plt.plot(plot_x, gauss(plot_x, np.amax(hist[fit_range_peak: fit_range_peak + 25]), peak_guess, 1.), 'C3', label="Peak Guess")
         plt.legend()
         plt.ylim(0, 2000)
@@ -86,9 +86,87 @@ def fit_spectrum(charge, distance_guess=4, show_plots=False, number=0, col=None,
 
         plt.show()
 #         plt.savefig("./output_plots/col_" + str(col).zfill(2) + "_row_" + str(row).zfill(2) + ".pdf")
-        return np.abs(edges[fit_range_pedestal] - peak_guess)
+        return np.abs(peak_guess)
 
-    return np.abs(popt_peak[1] - popt_pedestal[1])
+    return np.abs(popt_peak[1])
+
+
+def plot_calibrated_spectrum(charge, distance_guess=4, show_plots=False):
+    hist, edges = np.histogram(charge, bins=np.arange(-10.5, 40.5, 1))
+    mids = edges + 0.5
+
+    def gauss(x, amp, mu, sigma):
+        return amp * np.exp(- (x - mu) * (x - mu) / (2 * sigma * sigma))
+
+    # Use rising slope of pedestal peak and 2 bins of falling slope to fit peak
+    fit_range_pedestal = np.where(hist == np.max(hist))[0][0]
+
+    # search in range +/- 3 from guessed peak for maximum
+    # fit_range_peak = signal_range[0] + np.where(signal == np.max(signal))[0][0]
+    fit_range_peak = fit_range_pedestal + distance_guess
+
+    peak_guess = mids[fit_range_peak] + np.where(np.amax(hist[fit_range_peak: fit_range_peak + 25]) == hist[fit_range_peak: fit_range_peak + 25])[0][0] + .5
+
+    plt.clf()
+
+    if show_plots:
+        plt.clf()
+
+        plt.bar(mids[:-1], hist, width=1, fill=False, edgecolor='C0')
+        plt.plot(mids[:-1], hist, 'C0.', label="Data")
+        # plt.plot([edges[fit_range_pedestal - 8], edges[fit_range_pedestal - 8]], [0, 10000], 'C1')
+        # plt.plot([edges[fit_range_pedestal + 1], edges[fit_range_pedestal + 1]], [0, 10000], 'C1')
+        # plt.plot([edges[fit_range_peak], edges[fit_range_peak]], [0, 10000], 'C3')
+        # plt.plot([edges[fit_range_peak + 25], edges[fit_range_peak + 25]], [0, 10000], 'C3')
+#         plt.show()
+
+#     try:
+        # fit pedestal
+    popt_pedestal, _ = curve_fit(gauss, mids[fit_range_pedestal - 8:fit_range_pedestal + 1],
+                                 hist[fit_range_pedestal - 8:fit_range_pedestal + 1],
+                                 p0=(np.amax(hist), mids[fit_range_pedestal], 1.))
+    
+    # fit peak
+    popt_peak, _ = curve_fit(gauss,
+                             mids[fit_range_peak:fit_range_peak + 15],
+                             hist[fit_range_peak:fit_range_peak + 15],
+                             p0=(np.amax(hist[fit_range_peak - 1: fit_range_peak + 15]), peak_guess, 1.))
+    
+    if show_plots:
+        plot_x = np.arange(-10, 150, 0.01)
+    
+        # plt.bar(edges[:-1], hist, width=1, fill=False, edgecolor='C0')
+        # plt.plot(edges[:-1], hist, 'C0.', label="Data")
+        plt.plot(plot_x, gauss(plot_x, *popt_pedestal), 'C1', label="Pedestal Fit")
+        plt.plot(plot_x, gauss(plot_x, *popt_peak), 'C3', label="Peak fit")
+        plt.legend()
+        plt.ylim(0, 2000)
+        plt.xlim(-10, 30)
+        # plt.yscale('log')
+        plt.ylim(ymin=0.01)
+    
+        print np.abs(popt_peak[1])
+    
+        plt.show()
+            # plt.savefig("./output_plots_cu/col_" + str(col).zfill(2) + "_row_" + str(row).zfill(2) + ".pdf")
+# 
+#     except Exception as e:
+#         print e
+# 
+#         plot_x = np.arange(-10, 150, 0.01)
+#         plt.plot(plot_x, gauss(plot_x, np.amax(hist), edges[fit_range_pedestal], 1.), 'C1', label="Pedestal Guess")
+#         plt.plot(plot_x, gauss(plot_x, np.amax(hist[fit_range_peak: fit_range_peak + 25]), peak_guess, 1.), 'C3', label="Peak Guess")
+#         plt.legend()
+#         plt.ylim(0, 2000)
+#         plt.xlim(-10, 30)
+#         # plt.yscale('log')
+#         plt.ylim(ymin=0.01)
+# 
+#         plt.show()
+#         
+#         return
+
+    return np.abs(popt_peak[1])
 
 
 def get_distance_map(input_file, show_plots=False, distance_guess=4):
@@ -103,8 +181,8 @@ def get_distance_map(input_file, show_plots=False, distance_guess=4):
             # row before col to preserve matrix dimensions
             distances[row, col] = fit_spectrum(charge, distance_guess, show_plots=show_plots, col=col + 1 + 16, row=row + 1)
 
-    with tb.open_file(input_file[:-7] + 'calibration_fe.h5', 'w') as out_file:
-        out_file.create_array(out_file.root, 'calibration', distances, "Calibration data for Fe")
+    with tb.open_file(input_file[:-7] + 'calibration_cu.h5', 'w') as out_file:
+        out_file.create_array(out_file.root, 'calibration', distances, "Calibration data for Cu")
 
     fig, ax = plt.subplots()
     im = ax.imshow(distances, interpolation='nearest', aspect='equal')
@@ -135,6 +213,7 @@ def create_calibration(calibration_list, energies, show_plots=False):
             adc_u = data[:, row, col]
 
             popt, _ = curve_fit(line, adc_u, energies, p0=((energies[-1] - energies[0]) / (adc_u[-1] - adc_u[0]), 0.))
+            print popt
             if show_plots:
                 plt.clf()
                 plt.title('Col %d / Row %d' % (col + 1, row + 1))
