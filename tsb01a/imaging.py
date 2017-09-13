@@ -15,9 +15,9 @@ exp = 50
 howmuch = 270000
 
 
-n_frames = 250000
-filename = '/media/tsb01a_data/100um_fe_characterization/250000'
-file_length = 10000
+n_frames = 15000
+filename = '/media/silab/9c56be36-6e1d-4765-9417-09384db0babf/x-ray-tube/BKG_200_40/BKG'
+file_length = 1000
 
 def record_data():
 
@@ -473,10 +473,10 @@ def get_hits(amplitudes):
     return hit_map, hits
 
 
-# start_record = time.time()
-# record_data()
-# end_record = time.time()
-# print 'recording took: ', end_record - start_record
+start_record = time.time()
+record_data()
+end_record = time.time()
+print 'recording took: ', end_record - start_record
 
 v_bias_40 = ['/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt00.h5',
              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt01.h5',
@@ -560,26 +560,26 @@ v_bias_30 = ['/media/silab/8420f8d2-80d9-4742-a6ab-998a7d6522b3/testbeam_data_ma
 # amplitudes = np.load('/media/silab/8420f8d2-80d9-4742-a6ab-998a7d6522b3/test_data/imaging/cd_source/amplitudes_47x12_100000.npy')
 # amplitudes = np.load('/media/silab/8420f8d2-80d9-4742-a6ab-998a7d6522b3/test_data/imaging/fe_source/amplitudes_47x12_50000.npy')
 
-amplitudes = np.load('/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/amplitudes_raw.npy')
-
-
-hist, edges = plot_single_spectrum(amplitudes, row=10, col=22, show_plots=True)
-_, _ = fit_spectrum_langau(amplitudes)
-
-
-hit_map, hits = get_hits(amplitudes[:, :, 16:32])
-
-# plot_single_spectrum(hits, row=10, col=31, show_plots=True)
-
-# amplitudes = amplitudes.reshape((len(amplitudes), 96 * 47))
-
-fig = plt.figure()
-ax = fig.add_subplot(111)
-ax.set_title('Hits (binary)')
-im = ax.imshow(hit_map, interpolation='none')
-fig.colorbar(im, ax=ax)
-plt.show()
-
-create_hit_table(hits)
+# amplitudes = np.load('/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/amplitudes_raw.npy')
+# 
+# 
+# hist, edges = plot_single_spectrum(amplitudes, row=10, col=22, show_plots=True)
+# _, _ = fit_spectrum_langau(amplitudes)
+# 
+# 
+# hit_map, hits = get_hits(amplitudes[:, :, 16:32])
+# 
+# # plot_single_spectrum(hits, row=10, col=31, show_plots=True)
+# 
+# # amplitudes = amplitudes.reshape((len(amplitudes), 96 * 47))
+# 
+# fig = plt.figure()
+# ax = fig.add_subplot(111)
+# ax.set_title('Hits (binary)')
+# im = ax.imshow(hit_map, interpolation='none')
+# fig.colorbar(im, ax=ax)
+# plt.show()
+# 
+# create_hit_table(hits)
 
 # print 'analysis took: ', end_analysis - start_analysis

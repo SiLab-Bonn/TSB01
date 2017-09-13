@@ -849,14 +849,14 @@ class tsb01(Dut):
 
 #         print'DATA_FIFO', self['DATA_FIFO'].get_fifo_size()
         
-        while not (self['OUTA1'].is_done() and self['OUTA2'].is_done() and self['DATA_FIFO'].get_fifo_size() == 0):
+        while not (self['OUTA1'].is_done() and self['OUTA2'].is_done() and self['DATA_FIFO'].get_FIFO_SIZE() == 0):
 
             nmdata = np.append(nmdata, self['DATA_FIFO'].get_data())
         # while not (self['OUTA1'].is_done()):
         #    nmdata = np.append(nmdata, self['DATA_FIFO'].get_data())
             i = i + 1
             if i % 1000 == 0:
-                print i, self['OUTA1'].is_done(), self['OUTA2'].is_done(), self['DATA_FIFO'].get_fifo_size()
+                print i, self['OUTA1'].is_done(), self['OUTA2'].is_done(), self['DATA_FIFO'].get_FIFO_SIZE()
             if i > 500:
                 time.sleep(0.001) # was 0.001
             if i > 10000:
