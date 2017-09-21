@@ -239,18 +239,18 @@ def create_calibration(calibration_list, energies, output_file, show_plots=False
     return slope, offset
 
 @njit
-def hist_hits(hits, hist, n_pixel_x, n_pixel_y, max_charge):
+def hist_hits(hits, hist, n_pixel_x, n_pixel_y, max_charge, min_charge):
     for hit in hits:
         col_i, row_i, charge_i = hit["column"] - 1, hit["row"] - 1, hit["charge"] - 1
         if col_i >= n_pixel_x:
             raise IndexError("Exceeding histogram size in x, please increase size.")
         if row_i >= n_pixel_y:
             raise IndexError("Exceeding histogram size in y, please increase size.")
-        if charge_i < max_charge:
-            hist[col_i, row_i, charge_i] = + 1
+        if min_charge <= charge_i < max_charge:
+            hist[col_i, row_i, charge_i - min_charge] = + 1
 
 
-def histogram_hits(hit_file, output_file, n_pixel_x, n_pixel_y, max_charge=256, chunk_size=100000):
+def histogram_hits(hit_file, output_file, n_pixel_x, n_pixel_y, max_charge=256, min_charge=0, chunk_size=100000):
     if max_charge > 2**8:
         raise IndexError("Max entries per bin should not exceed 256")
 
@@ -258,7 +258,7 @@ def histogram_hits(hit_file, output_file, n_pixel_x, n_pixel_y, max_charge=256, 
         n_hits = in_file_h5.root.Hits.shape[0]
         with tb.open_file(output_file, "w") as out_file_h5:
             hit_hist = out_file_h5.create_carray(out_file_h5.root, name='HistHits', atom=tb.UInt16Atom(),
-                                                 shape=(n_pixel_x, n_pixel_y, max_charge),
+                                                 shape=(n_pixel_x, n_pixel_y, abs(min_charge) + max_charge),
                                                  filters=tb.Filters(complib='blosc', complevel=5, fletcher32=False))
             hit_hist[:] = 0
             pbar = progressbar.ProgressBar(widgets=['', progressbar.Percentage(), ' ',
@@ -267,12 +267,12 @@ def histogram_hits(hit_file, output_file, n_pixel_x, n_pixel_y, max_charge=256, 
                                            maxval=n_hits, poll=10, term_width=80)
             pbar.start()
 
-            hist = np.zeros(shape=(n_pixel_x, n_pixel_y, max_charge), dtype=np.uint8)
+            hist = np.zeros(shape=(n_pixel_x, n_pixel_y, abs(min_charge) + max_charge), dtype=np.uint16)
 
             for i in range(0, n_hits, chunk_size):
                 pbar.update(i)
                 hits = in_file_h5.root.Hits[i:i + chunk_size]
-                hist_hits(hits, hist, n_pixel_x, n_pixel_y, max_charge)
+                hist_hits(hits, hist, n_pixel_x, n_pixel_y, max_charge, min_charge)
 
             hit_hist[:] = hist
 
