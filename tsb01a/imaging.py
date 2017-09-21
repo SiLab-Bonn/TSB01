@@ -15,9 +15,10 @@ exp = 50
 howmuch = 270000
 
 
-n_frames = 15000
-filename = '/media/silab/9c56be36-6e1d-4765-9417-09384db0babf/x-ray-tube/BKG_200_40/BKG'
+n_frames = 1000
+filename = '/media/tsb01a_data/test/100um_test'
 file_length = 1000
+
 
 def record_data():
 
@@ -26,21 +27,21 @@ def record_data():
     device.init()
     device.sel_all(divide=clk_divide, howmuch=howmuch, repeat=0, reset=reset, delay0=delay, exp=exp, size=(n_cols, n_rows))
     time.sleep(.1)
-    
+
     # Start data taking
     for file_number in range(n_frames / file_length):
-        with tb.open_file(filename+'_pt'+str(file_number).zfill(2)+'.h5', 'w') as out_file:
+        with tb.open_file(filename + '_pt' + str(file_number).zfill(2) + '.h5', 'w') as out_file:
             waveforms = out_file.create_earray(out_file.root, name='event_data', atom=tb.UInt32Atom(), shape=(0, howmuch / 2), title='The raw events from the ADC', filters=tb.Filters(complib='blosc', complevel=5, fletcher32=False), expectedrows=file_length)
             for t in xrange(file_length):
                 raw_data = device.get_adc()
                 raw_data = raw_data.reshape((1, howmuch / 2))
-        
-                if np.any(raw_data == None):
+
+                if np.any(raw_data is None):
                     device.stop_adc()
                     device.init_adc(howmuch=howmuch)
                     print device['OUTA1'].is_done(), device['OUTA2'].is_done()
                     continue
-                    
+
                 if device['OUTA1'].get_count_lost() != 0 or device['OUTA2'].get_count_lost() != 0:
                     print t, device['OUTA1'].get_count_lost(), device['OUTA2'].get_count_lost()
                     device.stop_adc()
@@ -85,38 +86,37 @@ def analyze_nmdata(nmdata):
 # @profile
 def get_signal(data, show_plots=False):
     frame_length = n_rows * (2 * n_cols + 1 + reset + delay + 2 * n_cols + 2) # + 1 + exp + 3
-    
+
     # Determine offset manually to make sure frames are 100% overlapping
     offset = 0
-    
+
     # from start point, go through all the columns, then change for next row and go through all columns again
     # in 96 rows, 95 row changes are performed, therefore (n_rows - 1)
     first_frame = data[54:54 + clk_divide * frame_length]
     second_frame = data[offset + 54 + clk_divide * frame_length + clk_divide * (1 + exp + 3):offset + 54 + 2 * clk_divide * frame_length + clk_divide * (1 + exp + 3)]
 #     plt.plot(data, 'ro-')
-# 
+#
 #     x = np.arange(0, len(first_frame))
 #     plt.plot(first_frame, 'b.-')
 #     plt.plot(x, second_frame, 'r.-')
 #     plt.show()
-    
+
     # trim to pixels after reset
     first_frame = first_frame.reshape((n_rows, clk_divide * (2 * n_cols + 1 + reset + delay + 2 * n_cols + 2)))
-    
+
 #     plt.plot(first_frame[0])
 
-    
+
     first_frame = first_frame[:,2 * clk_divide * n_cols + clk_divide + reset * clk_divide + delay * clk_divide:- 2 * clk_divide]
-    
+
 #     print len(first_frame[0])
 #     plt.plot(first_frame[0])
 
-    
     # trim to pixels before reset
     second_frame = second_frame.reshape((n_rows, clk_divide * (2 * n_cols + 1 + reset + delay + 2 * n_cols + 2)))
-    
+
 #     plt.plot(second_frame[<10])
-    
+
     second_frame = second_frame[:,:2 * clk_divide * n_cols]
 
 #     plt.plot(second_frame[10])
@@ -124,16 +124,16 @@ def get_signal(data, show_plots=False):
 #     plt.show()
 
 #     fig = plt.figure()
-#     
+#
 #     ax = fig.add_subplot(211)
 #     im = ax.imshow(first_frame, cmap=plt.get_cmap('viridis'), aspect='auto', interpolation='none', vmin=np.amin(second_frame), vmax=np.amax(first_frame))
 #     fig.colorbar(im, ax=ax)
-#     
-#         
+#
+#
 #     ax = fig.add_subplot(212)
 #     im = ax.imshow(second_frame, cmap=plt.get_cmap('viridis'), aspect='auto', interpolation='none', vmin=np.amin(second_frame), vmax=np.amax(first_frame))
 #     fig.colorbar(im, ax=ax)
-#         
+#
 #     plt.show()
 
     # Make array with values from one pixel in one row
@@ -152,16 +152,16 @@ def get_signal(data, show_plots=False):
 #     ax1.set_title("After reset")
 #     im = ax1.imshow(first_frame / 10., cmap=plt.get_cmap('viridis'), interpolation='none', vmin=np.amin(second_frame / 10.), vmax=np.amax(first_frame / 10.))
 #     fig.colorbar(im, ax=ax1)
-#         
+#
 #     ax2 = fig.add_subplot(132)
 #     ax2.set_title("Before reset")
 #     im = ax2.imshow(second_frame / 10., cmap=plt.get_cmap('viridis'), interpolation='none', vmin=np.amin(second_frame / 10.), vmax=np.amax(first_frame / 10.))
 #     fig.colorbar(im, ax=ax2)
 
 #     plt.show()
-    
+
     signal = first_frame - second_frame
-    
+
     if show_plots:
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -180,7 +180,6 @@ def read_data(filename, chunk_size):
     Return first chunk_size datasets
     Use chunk_size = None for all datasets
     """
-    
 
     with tb.open_file(filename, 'r') as in_file:
         nmdata = in_file.root.event_data[:chunk_size]
@@ -188,62 +187,60 @@ def read_data(filename, chunk_size):
 
 
 def plot_single_spectrum(amplitudes, row, col, show_plots=False):
-    single_amplitudes = amplitudes[:,row,col]
+    single_amplitudes = amplitudes[:, row, col]
     print len(single_amplitudes)
 #     plt.hist(single_amplitudes, bins=np.arange(np.floor(np.min(single_amplitudes)) - 0.5, np.ceil(np.max(single_amplitudes)) + 0.5, 1))
 #     plt.show()
-    
+
     hist, edges = np.histogram(single_amplitudes, bins=np.arange(np.floor(np.min(single_amplitudes)) - 0.5, np.ceil(np.max(single_amplitudes)) + 0.5, 1))
     if show_plots:
-        plt.title('Pixel col: %s row: %s' %(col, row))
+        plt.title('Pixel col: %s row: %s' % (col, row))
         plt.bar(edges[:-1] + .5, hist, align='center', width=1)
 #         plt.ylabel('Counts')
 #         plt.xlabel('ADC units')
 #         plt.yscale('log')
         plt.show()
-    
+
 #     print np.sum(hist)
-    
+
     return hist, edges
 
 
 def calculate_amplitudes(filenames):
     logging.info('Start analysis')
-    
+
     # prepare array to hold analyzed data in form of stacked 2d images
     amplitudes = np.empty(shape=(n_rows, n_cols))
-    amplitudes = amplitudes[np.newaxis,:,:]
-    
+    amplitudes = amplitudes[np.newaxis, :, :]
+
     pbar = progressbar.ProgressBar(widgets=['', progressbar.Percentage(), ' ', progressbar.Bar(marker='#', left='|', right='|'), ' ', progressbar.AdaptiveETA()], maxval=len(filenames), poll=10, term_width=80).start()
-    
+
     for index, filename in enumerate(filenames):
         data_from_file = read_data(filename, 10000)
-    
+
         for raw_data in data_from_file:
             data = analyze_nmdata(raw_data)[1]
-            amplitudes = np.append(amplitudes, get_signal(data)[np.newaxis,:,:], axis=0)
-        
+            amplitudes = np.append(amplitudes, get_signal(data)[np.newaxis, :, :], axis=0)
+
         pbar.update(index)
-    
+
     pbar.finish()
-      
+
     logging.info('End analysis')
-    
 
     # truncate first image which is from np.empty initialization and return
-    return amplitudes[1:,:,:]
+    return amplitudes[1:, :, :]
 
 
 # TODO: Exception fangen wenn Fit nicht konvergiert
 def fit_spectrum_gauss(amplitudes):
-    
+
     hist, edges = np.histogram(amplitudes, bins=np.arange(-50 - 0.5, 50 + 0.5, .5))
-    
+
     mids = (edges + 0.25)
 
-
     def gauss(x, mean, sigma, amp):
-        return amp * np.exp( - (x - mean)*(x - mean) / (2 * sigma * sigma))
+        return amp * np.exp(- (x - mean) * (x - mean) / (2 * sigma * sigma))
 
 #     print hist[np.where(hist == np.amax(hist))[0]]
 
@@ -251,7 +248,6 @@ def fit_spectrum_gauss(amplitudes):
 #         plt.bar(mids[:-1], hist, align='center', width=.5)
 #         plt.show()
 
-    
     ped_index = np.where(hist == np.amax(hist))[0][0]
     ped_mean = mids[np.where(hist == np.amax(hist))[0][0]]
     peak_index = np.where(np.diff(hist) > 5)[0][-1]
@@ -265,17 +261,17 @@ def fit_spectrum_gauss(amplitudes):
 
     try:
         ped_coeff, _ = curve_fit(gauss, mids[ped_index - 10:ped_index + 10], hist[ped_index - 10:ped_index + 10], p0=(ped_mean, 2., np.amax(hist)), sigma=10, absolute_sigma=True)
-    
+
 #         plt.plot(np.arange(mids[0], mids[-1], 0.1), gauss(np.arange(mids[0], mids[-1], 0.1), *ped_coeff) + gauss(np.arange(mids[0], mids[-1], 0.1), peak_mean, .5, 0.027 * np.amax(hist)), "m-", linewidth=2, label='between fits')
 
         lower_bound = np.argwhere(mids > ped_coeff[0] + 4 * ped_coeff[1])[0][0]
 #         print mids[lower_bound:peak_index + 20]
-        
-        test = np.amax([lower_bound, peak_index -10])
+
+        test = np.amax([lower_bound, peak_index - 10])
 
 #         print mids[test]
         peak_coeff, _ = curve_fit(gauss, mids[test:peak_index + 20], hist[test:peak_index + 20], p0=(peak_mean, 1, 0.027 * np.amax(hist)), sigma=1, absolute_sigma=True)
-    
+
     # TODO: better error handling
     except RuntimeError:
         print 'Error occured'
@@ -290,7 +286,7 @@ def fit_spectrum_gauss(amplitudes):
         return {'mean': 0, 'sigma': 2, 'amp': 0}, {'mean': 0, 'sigma': 0, 'amp': 0}
 
 #         plt.show()
- 
+
 #         return {'mean': ped_mean, 'sigma': 2, 'amp': 0}, {'mean': 0.027 * np.amax(hist), 'sigma': 0, 'amp': 0}
     except TypeError:
         print 'Error occured'
@@ -298,7 +294,7 @@ def fit_spectrum_gauss(amplitudes):
         return {'mean': 0, 'sigma': 2, 'amp': 0}, {'mean': 0, 'sigma': 0, 'amp': 0}
 
 #         plt.show()
- 
+
 #         return {'mean': ped_mean, 'sigma': 2, 'amp': 0}, {'mean': 0.027 * np.amax(hist), 'sigma': 0, 'amp': 0}
 
 
@@ -308,12 +304,12 @@ def fit_spectrum_gauss(amplitudes):
 #     plt.plot(np.arange(mids[0], mids[-1], 0.1), gauss(np.arange(mids[0], mids[-1], 0.1), *ped_coeff), "g-", linewidth=2, label='result')
 #     plt.plot(np.arange(mids[0], mids[-1], 0.1), gauss(np.arange(mids[0], mids[-1], 0.1), *peak_coeff), "g-", linewidth=2)
 #     plt.legend(loc=0)
-# 
+#
 #     plt.show()
 
     pedestal = {'mean': ped_coeff[0], 'sigma': np.abs(ped_coeff[1]), 'amp': ped_coeff[2]}
     peak = {'mean': peak_coeff[0], 'sigma': np.abs(peak_coeff[1]), 'amp': peak_coeff[2]}
-    
+
     return pedestal, peak
 
 
@@ -323,16 +319,14 @@ def fit_spectrum_langau(amplitudes):
 
     mids = (edges + 0.5)
 
-
     def gauss(x, mean, sigma, amp):
-        return amp * np.exp( - (x - mean)*(x - mean) / (2 * sigma * sigma))
+        return amp * np.exp(- (x - mean) * (x - mean) / (2 * sigma * sigma))
 
 #     print hist[np.where(hist == np.amax(hist))[0]]
 
 #     plt.bar(mids[:-1], hist, align='center', width=1)
 #     plt.show()
 
-    
     ped_index = np.where(hist == np.amax(hist))[0][0]
     ped_mean = mids[np.where(hist == np.amax(hist))[0][0]]
 #     peak_index = np.where(np.diff(hist) > 10000)[0][-1]
@@ -349,20 +343,19 @@ def fit_spectrum_langau(amplitudes):
 #     plt.ylim(None, 80000)
 #     plt.show()
 
-
     try:
         ped_coeff, _ = curve_fit(gauss, mids[ped_index - 10:ped_index + 10], hist[ped_index - 10:ped_index + 10], p0=(ped_mean, 2, np.amax(hist)), sigma=None, absolute_sigma=True)
-    
+
 #         plt.plot(np.arange(mids[0], mids[-1], 0.1), gauss(np.arange(mids[0], mids[-1], 0.1), *ped_coeff) + gauss(np.arange(mids[0], mids[-1], 0.1), peak_mean, .5, 0.027 * np.amax(hist)), "m-", linewidth=2, label='between fits')
 
         lower_bound = np.argwhere(mids > ped_coeff[0] + 4 * ped_coeff[1])[0][0]
 #         print mids[lower_bound:peak_index + 20]
-        
-        test = np.amax([lower_bound, peak_index -10])
+
+        test = np.amax([lower_bound, peak_index - 10])
 
 #         print mids[test]
         peak_coeff, _ = curve_fit(gauss, mids[test:peak_index + 20], hist[test:peak_index + 20], p0=(peak_mean, 5, 0.005 * np.amax(hist)), sigma=None, absolute_sigma=True)
-    
+
     # TODO: better error handling
     except RuntimeError:
         print 'RuntimeError occured'
@@ -376,9 +369,9 @@ def fit_spectrum_langau(amplitudes):
         plt.legend(loc=0)
         plt.show()
         return {'mean': 0, 'sigma': 2, 'amp': 0}, {'mean': 0, 'sigma': 0, 'amp': 0}
- 
+
 #         plt.show()
- 
+
 #         return {'mean': ped_mean, 'sigma': 2, 'amp': 0}, {'mean': 0.027 * np.amax(hist), 'sigma': 0, 'amp': 0}
     except TypeError:
         print 'TypeError occured'
@@ -387,7 +380,7 @@ def fit_spectrum_langau(amplitudes):
         return {'mean': 0, 'sigma': 2, 'amp': 0}, {'mean': 0, 'sigma': 0, 'amp': 0}
 
 #         plt.show()
- 
+
 #         return {'mean': ped_mean, 'sigma': 2, 'amp': 0}, {'mean': 0.027 * np.amax(hist), 'sigma': 0, 'amp': 0}
 
 
@@ -402,9 +395,8 @@ def fit_spectrum_langau(amplitudes):
 
     pedestal = {'mean': ped_coeff[0], 'sigma': np.abs(ped_coeff[1]), 'amp': ped_coeff[2]}
     peak = {'mean': peak_coeff[0], 'sigma': np.abs(peak_coeff[1]), 'amp': peak_coeff[2]}
-    
-    return pedestal, peak
 
+    return pedestal, peak
 
 
 def create_hit_table(hits):
@@ -421,24 +413,23 @@ def create_hit_table(hits):
             event_numbers[index], col[index], row[index], charge[index] = hit[0] + 1, hit[2] + 1, hit[1] + 1, hits[hit[0], hit[1], hit[2]]
         except IndexError:
             print index, hit
-            
-    array = np.stack((event_numbers, frame_numbers, col, row, charge), axis=-1)
-    
 
-    hit_table = np.core.records.fromarrays(array.transpose(), 
-                                             names='event_number, frame, column, row, charge',
-                                             formats = '<i4, <u1, <u2, <u2, <u4')
+    array = np.stack((event_numbers, frame_numbers, col, row, charge), axis=-1)
+
+    hit_table = np.core.records.fromarrays(array.transpose(),
+                                           names='event_number, frame, column, row, charge',
+                                           formats='<i4, <u1, <u2, <u2, <u4')
 
     del array
 
     with tb.open_file('/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/Hits.h5', 'w') as out_file:
-#         hit_table = out_file.create_table(where=out_file.root, title='Hit information', filters=tb.Filters(complib='blosc', complevel=5, fletcher32=False), expectedrows=len(hit_table), obj=hit_table)
-#         hit_table = out_file.create_table(where=out_file.root, obj=hit_table)
+        #         hit_table = out_file.create_table(where=out_file.root, title='Hit information', filters=tb.Filters(complib='blosc', complevel=5, fletcher32=False), expectedrows=len(hit_table), obj=hit_table)
+        #         hit_table = out_file.create_table(where=out_file.root, obj=hit_table)
         hits = out_file.create_table(out_file.root,
-                                      name='Hits',
-                                      title='Amplitudes larger than baseline',
-                                      description=hit_table.dtype,
-                                      filters=tb.Filters(complib='blosc', complevel=5, fletcher32=False))
+                                     name='Hits',
+                                     title='Amplitudes larger than baseline',
+                                     description=hit_table.dtype,
+                                     filters=tb.Filters(complib='blosc', complevel=5, fletcher32=False))
         hits.append(hit_table)
 
     return
@@ -473,40 +464,40 @@ def get_hits(amplitudes):
     return hit_map, hits
 
 
-start_record = time.time()
+# start_record = time.time()
 record_data()
-end_record = time.time()
-print 'recording took: ', end_record - start_record
+# end_record = time.time()
+# print 'recording took: ', end_record - start_record
 
-v_bias_40 = ['/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt00.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt01.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt02.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt03.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt04.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt05.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt06.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt07.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt08.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt09.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt10.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt11.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt12.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt13.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt14.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt15.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt16.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt17.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt18.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt19.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt20.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt21.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt22.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt23.h5',
-             '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt24.h5',
-             ]
-
-v_bias_30 = ['/media/silab/8420f8d2-80d9-4742-a6ab-998a7d6522b3/testbeam_data_mar17/imaging/v_bias_30/100000_pt00.h5'
-             ]
+# v_bias_40 = ['/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt00.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt01.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt02.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt03.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt04.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt05.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt06.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt07.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt08.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt09.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt10.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt11.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt12.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt13.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt14.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt15.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt16.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt17.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt18.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt19.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt20.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt21.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt22.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt23.h5',
+#              '/media/tsb01a_data/testbeam_data_mar17/imaging/v_bias_40/250000_pt24.h5',
+#              ]
+# 
+# v_bias_30 = ['/media/silab/8420f8d2-80d9-4742-a6ab-998a7d6522b3/testbeam_data_mar17/imaging/v_bias_30/100000_pt00.h5'
+#              ]
 
 
 # tb_data = '/media/silab/8420f8d2-80d9-4742-a6ab-998a7d6522b3/testbeam_data_dec16/all_px/30000_pt05.h5'

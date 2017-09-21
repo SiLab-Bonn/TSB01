@@ -12,8 +12,8 @@ delay = 10
 exp = 50
 howmuch = 270000  # length of data to record (possible to record multiple frames at once)
 
-n_frames = 10000  # total number of datasets to record
-filename = 'example_path/base_filename'  # extension and numbering will be added dynamically based on chunk size
+n_frames = 750000  # total number of datasets to record
+filename = '/media/tsb01a_data/calibration/700um/am241/am_calibration'  # extension and numbering will be added dynamically based on chunk size
 file_length = 5000  # split data into files with this number of datasets
 
 
@@ -27,7 +27,7 @@ def record_data():
 
     # Start data taking
     for file_number in range(n_frames / file_length):
-        with tb.open_file(filename + '_pt' + str(file_number).zfill(2) + '.h5', 'w') as out_file:
+        with tb.open_file(filename + '_pt' + str(file_number + 84).zfill(2) + '.h5', 'w') as out_file:
             waveforms = out_file.create_earray(out_file.root, name='event_data', atom=tb.UInt32Atom(),
                                                shape=(0, howmuch / 2), title='The raw events from the ADC',
                                                filters=tb.Filters(complib='blosc', complevel=5, fletcher32=False),

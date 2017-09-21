@@ -6,134 +6,111 @@ import logging
 import os.path
 import progressbar
 from matplotlib import pyplot as plt
-from scipy.constants.constants import alpha
 
 clk_divide = 12
-n_data_points = 800000
-n_framesets = 5
+n_data_points = 525000
+n_framesets = 10000
+file_length = 2500
 
 # data = device.get_adc()[1]
-def record_data(n_framesets):
+def record_data(n_framesets, filename, overwrite=False):
+    # Checks if file already exists if not stated otherwise
+    if not overwrite and os.path.isfile(filename):
+        logging.info('File already exists, abort.')
+        return
+    
+# TODO: save configuration in data file
     device = tsb01.tsb01()
     device.init()
-    device.sel_all(howmuch=n_data_points, divide=clk_divide)
-    
+    device.sel_all(howmuch=n_data_points, divide=clk_divide, repeat=0)
+    print device['OUTA1'].is_done(), device['OUTA2'].is_done()
     time.sleep(.1)
+
+    logging.info('Starting measurement')
+    pbar = progressbar.ProgressBar(widgets=['', progressbar.Percentage(), ' ', progressbar.Bar(marker='#', left='|', right='|'), ' ', progressbar.AdaptiveETA()], maxval=n_framesets, poll=10, term_width=80).start()
+    for file_number in range(n_framesets / file_length):
+
+        with tb.open_file(filename+'_pt'+str(file_number).zfill(2)+'.h5', 'w') as out_file:
+            waveforms = out_file.create_earray(out_file.root, name='event_data', atom=tb.UInt32Atom(), shape=(0, n_data_points), title='The raw events from the ADC', filters=tb.Filters(complib='blosc', complevel=5, fletcher32=False), expectedrows=n_framesets)
+    #         configuration = out_file.create_earray(out_file.root, name='settings', title='Settings for data taking')
+    #         configuration.append(n_data_points)
+    #         configuration.flush()
     
-    with tb.open_file('waveform_all_px.h5', 'w') as out_file:
-        logging.info('Starting measurement')
-        waveforms = out_file.create_earray(out_file.root, name='event_data', atom=tb.UIntAtom(), shape=(0, n_data_points), title='The raw events from the ADC', filters=tb.Filters(complib='blosc', complevel=5, fletcher32=False), expectedrows=n_framesets)
+            for t in xrange(file_length):
+                data = np.empty(shape=(1, n_data_points))
     
-        for num in range(n_framesets):
-            data = np.empty(shape=(1, n_data_points))
-
-            #start adc to wait for next ADC_SYNC signal
-#             device.start_adc()
-            data[0,:] = device.get_adc()[1]
-        #             plt.plot(data[0,:])
-        #             plt.show()
-            waveforms.append(data)
-            waveforms.flush()
-#             time.sleep(.005)
-            
-def read_data(frameset):
-    '''
-    Returns one dataset containing a number of consecutive frame (depending on the datapoints and clock divide)
-    '''
+                raw_data = device.get_adc()
+                
+                if np.any(raw_data == None):
+                    device.stop_adc()
+                    device.init_adc(howmuch=n_data_points)
+                    print device['OUTA1'].is_done(), device['OUTA2'].is_done()
+                    continue
     
-    with tb.open_file('waveform_all_px.h5', 'r') as in_file:
-        logging.info('Reading data')
-        return in_file.root.event_data[frameset]
-
-def analysis(raw_data, show_plots=False):
-    data = raw_data
+                if t % 20 == 0:
+                    pbar.update(file_number * file_length + t)
     
-    x = np.arange(len(data))
-    # print len(data)
-    if show_plots:
-        plt.plot(x, data, '-')
-        # plt.plot(x[::4], data[::4], 'o')
-        plt.show()
+                # Check for lost data          
+                if device['OUTA1'].get_count_lost() != 0 or device['OUTA2'].get_count_lost() != 0:
+                    print t, device['OUTA1'].get_count_lost(), device['OUTA2'].get_count_lost()
+                    device.stop_adc()
+                    device.init_adc(howmuch=n_data_points)
+                    print device['OUTA1'].is_done(), device['OUTA2'].is_done()
+                    continue
+                else:
+                    data[0,:] = raw_data
+                #             plt.plot(data[0,:])
+                #             plt.show()
+                    waveforms.append(data)
+                    waveforms.flush()
+        #             time.sleep(.005)
+    pbar.finish()
 
-    # Take (hardcoded) third and fourth frame for analysis
-    # 10 is offset from the beginning
-    # 113 is to overlap the waveforms correctly
-    first_frame = data[clk_divide * (1 * 20640 + 1 * 1000 + 10): clk_divide * (2 * 20640 + 1 * 1000 + 10)]
-    second_frame = data[clk_divide * (2 * 20640 + 2 * 1000 - 113 + 10): clk_divide * (3 * 20640 + 2 * 1000 - 113 + 10)]
 
-    # Plot raw data forms
-    if show_plots:
-        plt.plot(first_frame, 'b.-')
-        plt.plot(second_frame, 'r.-')
-        plt.show()
+def hit_monitor(raw_data, threshold=20):
+    # Fast analysis to print some hits
+    first_frame = raw_data[clk_divide * (0 * 20640 + 0 * 1000 + 10): clk_divide * (1 * 20640 + 0 * 1000 + 10)]
+    second_frame = raw_data[clk_divide * (1 * 20640 + 1 * 1000 - 113 + 10): clk_divide * (2 * 20640 + 1 * 1000 - 113 + 10)]
 
-    # one row equals 215 sequencer clocks
+    # fold data of all rows into one
     first_frame = first_frame.reshape(96, clk_divide * 215)
     second_frame = second_frame.reshape(96, clk_divide * 215)
 
-    if show_plots:
-        for one_row in range(96):
-            plt.plot(first_frame[one_row], 'b.', alpha=0.2)
-            plt.plot(second_frame[one_row], 'r.', alpha=0.2)
-        plt.show()
-
-    # region of interest (three flavors)
-    # 47 = 16 + 16 + 15 columns 
+    # select region of signal
     first_frame = first_frame[:,1388:1388 + 2 * clk_divide * 47].reshape(-1)
     second_frame = second_frame[:,1388:1388 + 2 * clk_divide * 47].reshape(-1)
-    
-    if show_plots:
-        plt.plot(first_frame, 'b.')
-        plt.plot(second_frame, 'r.')
-        plt.show()
-    
+
     after_reset = first_frame.reshape(96, clk_divide * 2* 47)
     before_reset = second_frame.reshape(96, clk_divide * 2* 47)
-    
+
     pedestal = np.empty([96, 47])
     signal = np.empty([96, 47])
-    
+
     for i in range(96):
-        one_row = after_reset[i,:]
-        one_row = one_row.reshape(47, clk_divide * 2)
-        one_row = np.mean(one_row[:,3:17], axis=1)
-        pedestal[i] = one_row
-    
-    for i in range(96):
-        one_row = before_reset[i,:]
-        one_row = one_row.reshape(47, clk_divide * 2)
-        one_row = np.mean(one_row[:,3:17], axis=1)
-        signal[i] = one_row
+        row_after_rst = after_reset[i,:]
+        row_after_rst = row_after_rst.reshape(47, clk_divide * 2)
+        row_after_rst = np.mean(row_after_rst[:,3:17], axis=1)
+        pedestal[i] = row_after_rst
         
+        row_before_rst = before_reset[i,:]
+        row_before_rst = row_before_rst.reshape(47, clk_divide * 2)
+        row_before_rst = np.mean(row_before_rst[:,3:17], axis=1)
+        signal[i] = row_before_rst
+
     pixel_values = pedestal - signal
+    
+    pixel_values[pixel_values > threshold] = 1
+    pixel_values[pixel_values <= threshold] = 0
+
     fig = plt.figure()
-    ax1 = fig.add_subplot(131)
-    ax1.set_title('Signal')
-    im = ax1.imshow(signal, cmap=plt.get_cmap('viridis'), interpolation='none')
-    fig.colorbar(im, ax=ax1)
+    ax = fig.add_subplot(111)
+    ax.set_title('Binary hits')
+    im = ax.imshow(signal, cmap=plt.get_cmap('viridis'), interpolation='none')
+    fig.colorbar(im, ax=ax)
     
-    ax2 = fig.add_subplot(132)
-    im = ax2.imshow(pedestal, cmap=plt.get_cmap('viridis'), interpolation='none')
-    ax2.set_title('Pedestal')
-    fig.colorbar(im, ax=ax2)
-    
-    ax3 = fig.add_subplot(133)
-    im = ax3.imshow(pixel_values, cmap=plt.get_cmap('viridis'), interpolation='none')
-    ax3.set_title('Amplitude')
-    fig.colorbar(im, ax=ax3)
-    
-    # number of negative entries
-    print 'total negative signal', len(pixel_values.reshape(-1)[pixel_values.reshape(-1) < 0])
-    print 'negative signal in last flavor', len(pixel_values[:, 32:].reshape(-1)[pixel_values[:, 32:].reshape(-1) < 0])
-    
-    plt.show()
 
-start = time.clock()
-record_data(n_framesets=5)
-stop = time.clock()
-  
-print stop - start
-
-for frameset in range(5):
-    data = read_data(frameset)
-    analysis(data)
+# start = time.clock()
+record_data(n_framesets=n_framesets, filename='/home/remote/Documents/iron_data/all_px/10000_without_source')
+# stop = time.clock()
+      
+# print stop - start

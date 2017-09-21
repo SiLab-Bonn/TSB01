@@ -381,6 +381,14 @@ module tsb01 (
     assign {LED2, LED3, LED4, LED5} = ADC_ERROR;
     assign DEBUG_ADCSTART = ADC_ERROR[0];
 
+    wire adc_sync_flag;
+    reg adc_trig;
+    always @ (posedge ADC_ENC)
+    begin
+        adc_trig <= ADC_SYNC[0];
+    end
+    assign adc_sync_flag = ADC_SYNC[0] & ~adc_trig;
+
     genvar i;
     generate
       for (i = 0; i < 4; i = i + 1) begin: adc_gen
@@ -396,7 +404,7 @@ module tsb01 (
             .ADC_IN(ADC_IN[i]),
 
             .ADC_SYNC(ADC_SYNC[i]),
-            .ADC_TRIGGER(1'b0),
+            .ADC_TRIGGER(adc_sync_flag),
 
             .BUS_CLK(BUS_CLK),
             .BUS_RST(BUS_RST),

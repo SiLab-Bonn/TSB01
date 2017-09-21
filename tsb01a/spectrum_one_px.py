@@ -9,14 +9,13 @@ import logging
 from scipy.signal import medfilt
 from numba import jit, njit
 
-# import tsb01
-
 from lmfit import Model
 from lmfit.models import GaussianModel
 
 from scipy.optimize import curve_fit
 
 file_length = 10000
+
 
 def analyze_nmdata(nmdata):
         single = False
@@ -56,6 +55,8 @@ def record_data(filename='waveform_data', n_samples=5000, overwrite=False):
     if not overwrite and os.path.isfile(filename):
         logging.info('File already exists, abort.')
         return
+    
+    import tsb01
 
     # initialize device
     device = tsb01.tsb01()
@@ -96,29 +97,31 @@ def record_data(filename='waveform_data', n_samples=5000, overwrite=False):
 def consecutive(data, max_stepsize=10):  # Returns group of consecutive increasing values
     return np.split(data, np.where(np.diff(data) > max_stepsize)[0] + 1)
 
+
+def gauss(x, mean, sigma, amp):
+    return amp * np.exp( - (x - mean)*(x - mean) / (2 * sigma * sigma))
+
+# @profile
 def analyze_data(files):
     amplitudes = np.empty(shape=1)
 
     for filename in files:
         with tb.open_file(filename) as data_file:
-            for dataset in data_file.root.event_data[:]:
+            for dataset in data_file.root.event_data[:5000]:
 #                 dataset = medfilt(dataset.astype(np.int16), 5)
 #                 plt.plot(dataset)
 #                 plt.show()
-                hist, edges = np.histogram(dataset, bins=np.arange(np.floor(np.min(dataset)) - 0.5, np.ceil(np.max(dataset)) + 0.5, 1))
-                mids = edges + 0.5
+                hist, mids = np.histogram(dataset[::5], bins=np.arange(np.floor(np.min(dataset)) - 0.5, np.ceil(np.max(dataset)) + 0.5, 1))
+                mids += 0.5
+                
+                coeff, _ = curve_fit(gauss, mids[:-1], hist[:], p0=(np.mean(dataset), 3, 5000), sigma=10, absolute_sigma=True)
+                mean, sigma = coeff[0], coeff[1]
 
-                model = Model(gauss)
-                pars = model.make_params(amp=25000, mean=np.mean(dataset[::10]), sig=2.)
+#                 del hist, mids
 
-                result = model.fit(hist, pars, x=mids[:-1])
-                mean = result.params['mean'].value
-                sigma = result.params['sig'].value
-
-#                 print result.fit_report()
-#                 plt.plot(mids[:-1], result.best_fit, 'r-')
-#                 plt.bar(edges[:-1], hist, 1)
-#                 plt.show()
+#                 plt.bar(mids[:-1], hist, 1)
+#                 plt.plot(mids[:-1], gauss(mids[:-1], *coeff), 'r-')
+#                 plt.show()                
 
                 amplitudes = _get_amplitudes(dataset, mean, sigma, amplitudes)
 
@@ -127,27 +130,56 @@ def analyze_data(files):
     return amplitudes
 
 
+def analyze_fast(files):
+    amplitudes = np.empty(shape=1)
+
+    for filename in files:
+        with tb.open_file(filename) as data_file:
+            for dataset in data_file.root.event_data[:3500]:
+#                 dataset = medfilt(dataset.astype(np.int16), 5)
+                plt.plot(dataset, '-')
+                plt.ylabel('Signal / ADC units')
+                plt.xlabel('Time')
+                plt.show()
+                reset_peak_indices = np.arange(18, 99928, 1030)
+#                 print reset_peak_indices
+
+#                 del hist, mids
+
+#                 plt.bar(mids[:-1], hist, 1)
+#                 plt.plot(mids[:-1], gauss(mids[:-1], *coeff), 'r-')
+#                 plt.show()                
+
+                amplitudes = _store_amplitudes(reset_peak_indices, dataset, amplitudes)
+
+    amplitudes = amplitudes[1:]
+
+    return amplitudes
+
+
+
+# @profile
 def _get_amplitudes(dataset, mean, sigma, amplitudes):
 # tweaking possibilities: distance between two hits and amplitude threshold
     if len(np.where(dataset > mean + 10 * sigma)[0]) != 0:
         reset_peaks = np.where(dataset > mean + 10 * sigma)[0]
 
         # indizes in dataset of falling edge of hit. 50 is minimum distance between two distinct hits
-        reset_peak_indices = reset_peaks[0]
-        reset_peak_indices = np.append(reset_peak_indices, reset_peaks[np.where(np.diff(reset_peaks) > 950)[0] + 1])
+        reset_peak_indices = [reset_peaks[0]]
+        reset_peak_indices = np.concatenate((reset_peak_indices, reset_peaks[np.where(np.diff(reset_peaks) > 900)[0] + 1]))
 #                     print reset_peak_indices
 
 #                     plt.plot(dataset, 'b.-')
 #                     plt.plot(medfilt(dataset.astype(np.int16), 5), 'r.-')
 #                     plt.show()
-        for peak_index in reset_peak_indices:
-            if peak_index <= 15 or peak_index >= 99000:
-                continue
-#                     plt.plot(dataset)
-#                     plt.show()
+        amplitudes = _store_amplitudes(reset_peak_indices, dataset, amplitudes)
+    return amplitudes
 
-            amplitude = np.mean(dataset[peak_index + 18:peak_index + 23]) - np.mean(dataset[peak_index + 1000:peak_index + 1010])
-            amplitudes = np.append(amplitudes, amplitude)
+@njit
+def _store_amplitudes(reset_peak_indices, dataset, amplitudes):
+    for peak_index in reset_peak_indices[:-1]:
+            amplitude = np.median(dataset[peak_index + 15:peak_index + 25]) - np.median(dataset[peak_index + 1010:peak_index + 1020])
+            amplitudes = np.concatenate((amplitudes, np.array([amplitude])))
     return amplitudes
 
 
@@ -159,20 +191,21 @@ def plot_spectrum(amplitudes_arr):
 
     for amplitudes in amplitudes_arr:
         print 'hits: ', len(amplitudes)
+#         amplitudes = 0.43 * amplitudes  # convert to mV
 
-        plt.hist(amplitudes, bins=np.arange(np.floor(np.amin(amplitudes)) - 0.5, np.ceil(np.amax(amplitudes)) + 0.5, 1), label='todo', alpha=alpha)
-        hist, edges = np.histogram(amplitudes, bins=np.arange(np.floor(np.min(amplitudes)) - 0.5, np.ceil(np.max(amplitudes)) + 0.5, 1))
+        plt.hist(amplitudes, bins=np.arange(np.floor(np.amin(amplitudes)) - 0.5, np.ceil(np.amax(amplitudes)) + 0.5, bin_width), label='todo', alpha=alpha)
+        hist, edges = np.histogram(amplitudes, bins=np.arange(np.floor(np.min(amplitudes)) - 0.5, np.ceil(np.max(amplitudes)) + 0.5, bin_width))
 
-    plt.xlabel('Amplitude / ADC units')
+#     plt.xlabel('Amplitude / mV')
     plt.ylabel('Counts')
-    plt.ylim(0, 1000)
-    plt.legend(loc=0)
+#     plt.ylim(0, 1000)
+#     plt.legend(loc=0)
     plt.show()
 
     return hist, edges
 
 
-def fit_spectrum(hist, edges):
+def fit_tb_spectrum(hist, edges):
     mids = edges + 0.5
 
     from pylandau import langau
@@ -183,31 +216,44 @@ def fit_spectrum(hist, edges):
     print coeff
 
     plt.bar(mids[:-1], hist, align='center', width=1)
-    plt.ylim(0, 1000)
+    plt.ylim(0, 1500)
 
-    plt.plot(mids[:-1], langau(mids[:-1], *coeff), 'g-', linewidth=1.5)
-    plt.plot(mids[62:-1], spectrum_func(mids[62:-1], *coeff), "r-", linewidth=3)
+#     plt.plot(mids[:-1], langau(mids[:-1], *coeff), 'g-', linewidth=1.5)
+#     plt.plot(mids[62:-1], spectrum_func(mids[62:-1], *coeff), "r-", linewidth=3)
+    plt.xlabel('Amplitude / mV')
+    plt.ylabel('Counts')
     plt.show()
 
 
-def double_gauss(x, a1, m1, s1, a2, m2, s2):
-    return a1 * np.exp( - (x - m1)*(x - m1) / (2 * s1 * s1)) + a2 * np.exp( - (x - m2)*(x - m2) / (2 * s2 * s2))
+def fit_spectrum(hist, edges):
+    mids = (edges + 0.5)
 
+    def gauss(x, mean, sigma, amp):
+        return amp * np.exp( - (x - mean)*(x - mean) / (2 * sigma * sigma))
+    
+    plot_range = np.arange(mids[0], mids[-1], 0.1)
 
-def gauss(x, amp, mean, sig):
-    return amp * np.exp( - (x - mean)*(x - mean) / (2 * sig * sig))
+    coeff, _ = curve_fit(gauss, mids[11:-1], hist[11:], p0=(12, .5, 300), sigma=2, absolute_sigma=True)
+    print 'peak:', coeff
+    
+    coeff_2, _ = curve_fit(gauss, mids[:10], hist[:10], p0=(0, 1, 20000), sigma=5, absolute_sigma=True)
+    print 'pedestal:', coeff_2
 
-
-def mpv(x, amp, mean, sig, a, offset):
-    return amp * np.exp( - (x - mean)*(x - mean) / (2 * sig * sig)) + a * (x - offset) * (x - offset) 
+    plt.bar(mids[:-1], hist, align='center', width=bin_width)
+#     plt.ylim(0, 3000)
+#     plt.xlabel('Amplitude / mV')
+    plt.ylabel('Counts')
+    plt.plot(plot_range, gauss(plot_range, *coeff), "r-", linewidth=3)
+    plt.plot(plot_range, gauss(plot_range, *coeff_2), "r-", linewidth=3)
+    plt.show()
 
 
 if __name__== "__main__":
     base_path = '/media/silab/8420f8d2-80d9-4742-a6ab-998a7d6522b3/'
-    
+
 #     bias_60_files = [base_path + 'testbeam_data_dec16/single_px/bias60/bias60_pt00.h5',
 #                      base_path + 'testbeam_data_dec16/single_px/bias60/bias60_pt01.h5']
-
+#
     bias_40_files = [base_path + 'testbeam_data_dec16/single_px/bias40/bias40_pt00.h5',
                      base_path + 'testbeam_data_dec16/single_px/bias40/bias40_pt01.h5']
 # 
@@ -219,7 +265,31 @@ if __name__== "__main__":
 #
 #     wo_source = [base_path + 'test_data/single_px/40000_without_source_pt00.h5',
 #                  base_path + 'test_data/single_px/40000_without_source_pt01.h5']
-#
+
+    test_data = [base_path + 'test_data/single_px/5000_fe_source_8-41_pt00.h5']
+    
+    fe_data = [base_path + 'test_data/single_px/fe_source/100000_fe_source_pt00.h5',
+               base_path + 'test_data/single_px/fe_source/100000_fe_source_pt01.h5',
+               base_path + 'test_data/single_px/fe_source/100000_fe_source_pt02.h5',
+               base_path + 'test_data/single_px/fe_source/100000_fe_source_pt03.h5']
+
+    am_data = [base_path + 'test_data/single_px/1000000_am_source_pt00.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt01.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt02.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt03.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt04.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt05.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt06.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt07.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt08.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt09.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt10.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt11.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt12.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt13.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt14.h5',
+               base_path + 'test_data/single_px/1000000_am_source_pt15.h5']
+
 #     from multiprocessing import Pool
 # 
 #     pool = Pool(2)
@@ -227,13 +297,22 @@ if __name__== "__main__":
 #     pool.close()
 #     amplitudes = result[0]
 
-    amplitudes_40 = analyze_data(bias_40_files)
+    overwrite = True
+    filename = 'amplitudes_fe_source_8-41.npy'
+    bin_width = 1.
 
-    np.save('amplitudes_40.npy', amplitudes_40)
+    start = time.time()
 
-#     amplitudes_30 = np.load('amplitudes_30.npy')
-# 
-# 
-#     hist, edges = plot_spectrum([amplitudes_30])
+    if not overwrite and os.path.isfile(filename):
+        logging.info('File already exists, abort.')
+    else:
+#         pass
+        amplitudes = analyze_fast(fe_data)
+#         np.save(base_path + 'test_data/single_px/fe_source/' + filename, amplitudes)
+#     stop = time.time()
 
-#     fit_spectrum(hist, edges)
+#     print stop - start
+    amplitudes = np.load(base_path + 'test_data/single_px/fe_source/amplitudes_fe_source_8-41.npy')
+    print len(amplitudes)
+    hist, edges = plot_spectrum([amplitudes])
+    fit_spectrum(hist, edges)
