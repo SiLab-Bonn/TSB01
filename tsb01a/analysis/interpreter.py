@@ -55,7 +55,7 @@ class Tsb01aInterpreter(object):
                     pbar.finish()
 
     def create_hit_table(self, input_file, output_file, threshold=0, start_col=1, calibrate=False, calibration_file=None):
-        hit_dtype = np.dtype([("event_number", "u8"), ("frame", "u1"), ("column", "u2"), ("row", "u2"), ("charge", "i2")])
+        hit_dtype = np.dtype([("event_number", "u8"), ("frame", "u1"), ("column", "u2"), ("row", "u2"), ("charge", "i4")])
         description = np.zeros((1,), dtype=hit_dtype).dtype
 
         logging.info("Start creating hit table")

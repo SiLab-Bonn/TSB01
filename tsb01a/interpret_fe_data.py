@@ -15,32 +15,29 @@ calibration_files = ['/media/tsb01a_data/x-ray-tube/test_with_fe_source/fe_new_c
 
 interpreter = interpreter.Tsb01aInterpreter(calibration_files, 31, 12, 12)
 # interpreter.interpret_data(output_file=calibration_path + 'interpreted.h5')
-# 
+#
 # interpreter.create_hit_table(input_file=calibration_path + 'interpreted.h5',
 #                              output_file=calibration_path + 'Hits.h5',
 #                              threshold=-100)
 
-# plot_raw_data.mk_plot(path + 'bias_05_interpreted.h5', path + 'bias_05.pdf', 22, 9)
-# hit_files = ['/media/tsb01a_data/calibration/700um/am241/Hits_pt00-19.h5',
-#              '/media/tsb01a_data/calibration/700um/am241/Hits_pt20-39.h5',
-#              '/media/tsb01a_data/calibration/700um/am241/Hits_pt40-59.h5',
-#              '/media/tsb01a_data/calibration/700um/am241/Hits_pt60-79.h5']
-
-# distances = calibration.get_distance_map(calibration_path + "Hits.h5", distance_guess=8, show_plots=True)
+distances = calibration.get_distance_map(calibration_path + "Hits.h5", distance_guess=7, show_plots=True)
 
 # print distances
 
-# calibration.create_calibration(['/media/tsb01a_data/x-ray-tube/cu/calibration_cu_flavor_2.h5',
-#                                 '/media/tsb01a_data/x-ray-tube/Niob/calibration_nb.h5',
-#                                 '/media/tsb01a_data/x-ray-tube/test_with_fe_source/calibration_fe.h5'],
-#                                [8040, 16615, 5899], show_plots=False)
+calibration.create_calibration(['/media/tsb01a_data/x-ray-tube/cu/calibration_cu.h5',
+                                '/media/tsb01a_data/x-ray-tube/Niob/calibration_nb.h5',
+                                '/media/tsb01a_data/x-ray-tube/test_with_fe_source/calibration_fe.h5'],
+                               energies=[8040, 16615, 5899],
+                               output_file='/media/tsb01a_data/x-ray-tube/calibration_test.h5',
+                               show_plots=True)
+ 
+# 
+# interpreter.create_hit_table(input_file=calibration_path + 'interpreted.h5',
+#                              output_file=calibration_path + 'Hits_calibrated.h5',
+#                              start_col=17,
+#                              threshold=-100,
+# #                            calibrate=False)
+#                              calibrate=True,
+#                              calibration_file='/media/tsb01a_data/x-ray-tube/calibration.h5')
+#
 
-import numpy as np
-
-# calibration.apply_calibration(np.ones(shape=(12, 15)), '/media/tsb01a_data/x-ray-tube/calibration.h5')
-
-interpreter.create_hit_table(input_file=calibration_path + 'interpreted.h5',
-                             output_file=calibration_path + 'Hits_calibrated.h5',
-                             threshold=-100,
-                             calibrate=True,
-                             calibration_file='/media/tsb01a_data/x-ray-tube/calibration.h5')
