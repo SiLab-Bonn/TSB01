@@ -5,12 +5,12 @@ import tables as tb
 import progressbar
 from numba import njit
 from scipy.optimize import curve_fit
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 
 
-def fit_spectrum(charge, distance_guess=4, show_plots=False, number=0, col=None, row=None):
-    hist, edges = np.histogram(charge, bins=np.arange(-25.5, 150.5, 1))
-    mids = edges + 0.5
+def fit_spectrum(charge, output_folder, distance_guess=4, show_plots=False, number=0, col=None, row=None):
+    hist, edges = np.histogram(charge, bins=np.arange(-25, 200, 1))
+    mids = edges  # + 0.5
 
     def gauss(x, amp, mu, sigma):
         return amp * np.exp(- (x - mu) * (x - mu) / (2 * sigma * sigma))
@@ -21,7 +21,6 @@ def fit_spectrum(charge, distance_guess=4, show_plots=False, number=0, col=None,
     # search in range +/- 3 from guessed peak for maximum
     # fit_range_peak = signal_range[0] + np.where(signal == np.max(signal))[0][0]
     fit_range_peak = fit_range_pedestal + distance_guess
-
     peak_guess = mids[fit_range_peak] + np.where(np.amax(hist[fit_range_peak: fit_range_peak + 25]) == hist[fit_range_peak: fit_range_peak + 25])[0][0]
 
     # Method for fast computation of peka position using a guess and weighted average
@@ -40,7 +39,7 @@ def fit_spectrum(charge, distance_guess=4, show_plots=False, number=0, col=None,
 
         if col or row:
             plt.title("Column: %d // Row: %d" % (col, row))
-        plt.bar(mids[:-1], hist, width=1, fill=False, edgecolor='C0')
+        plt.bar(mids[:-1], hist, width=1, fill=True, edgecolor='C0')
         plt.plot(mids[:-1], hist, 'C0.', label="Data")
         # plt.plot([fast_peak, fast_peak], [0, 2000], 'C3--', label="Average Peak")
         # plt.plot([edges[fit_range_pedestal - 8], edges[fit_range_pedestal - 8]], [0, 10000], 'C1')
@@ -50,9 +49,9 @@ def fit_spectrum(charge, distance_guess=4, show_plots=False, number=0, col=None,
 
     try:
         # fit pedestal
-        popt_pedestal, _ = curve_fit(gauss, mids[fit_range_pedestal - 8:fit_range_pedestal + 1],
-                                     hist[fit_range_pedestal - 8:fit_range_pedestal + 1],
-                                     p0=(np.amax(hist), mids[fit_range_pedestal], 1.))
+        popt_pedestal, _ = curve_fit(gauss, mids[fit_range_pedestal - 8:fit_range_pedestal + 3],
+                                     hist[fit_range_pedestal - 8:fit_range_pedestal + 3],
+                                     p0=(np.amax(hist), mids[fit_range_pedestal], .5))
 
         # fit peak
         popt_peak, _ = curve_fit(gauss,
@@ -69,16 +68,16 @@ def fit_spectrum(charge, distance_guess=4, show_plots=False, number=0, col=None,
             plt.plot(plot_x, gauss(plot_x, *popt_peak), 'C3', label="Peak fit")
             plt.legend()
             plt.ylim(0, 2000)
-            plt.xlim(-10, 100)
+            plt.xlim(-10, 45)
             # plt.yscale('log')
             plt.ylim(ymin=0.01)
 
-            print np.abs(popt_peak[1])
+            print np.abs(popt_peak[1] - popt_pedestal[1]), np.abs(popt_peak[2])
 
-            plt.show()
-#             plt.savefig("./output_plots_cu/col_" + str(col).zfill(2) + "_row_" + str(row).zfill(2) + ".pdf")
+#             plt.show()
+            plt.savefig(output_folder + r"/col_" + str(col).zfill(2) + "_row_" + str(row).zfill(2) + ".pdf")
 
-        return np.abs(popt_peak[1])
+        return np.abs(popt_pedestal[1]), np.abs(popt_peak[1]), np.abs(popt_peak[2])
 
     except Exception as excep:
         print excep
@@ -88,15 +87,14 @@ def fit_spectrum(charge, distance_guess=4, show_plots=False, number=0, col=None,
         plt.plot(plot_x, gauss(plot_x, np.amax(hist[fit_range_peak: fit_range_peak + 25]), peak_guess, 1.), 'C3', label="Peak Guess")
         plt.legend()
         plt.ylim(0, 2000)
-        plt.xlim(-10, 100)
+        plt.xlim(-10, 45)
         # plt.yscale('log')
         plt.ylim(ymin=0.01)
 
-        plt.show()
-#         plt.savefig("./output_plots/col_" + str(col).zfill(2) + "_row_" + str(row).zfill(2) + ".pdf")
-        return np.abs(popt_peak[1])
-
-    return np.abs(popt_peak[1])
+        plt.text(0.5, 0.5, 'Fit failed', color="red")
+#         plt.show()
+        plt.savefig(output_folder + r"/col_" + str(col).zfill(2) + "_row_" + str(row).zfill(2) + ".pdf")
+        return np.abs(popt_pedestal[1]), np.abs(peak_guess), 0
 
 
 def plot_calibrated_spectrum(charge, distance_guess=4, show_plots=False):
@@ -177,64 +175,94 @@ def plot_calibrated_spectrum(charge, distance_guess=4, show_plots=False):
     return np.abs(popt_peak[1])
 
 
-def get_distance_map(input_file, show_plots=False, distance_guess=4):
+def get_spectrum_map(input_file, output_folder, show_plots=False, guesses=4):
     hits = _get_pixel_data(input_file)
-    hits = hits[hits["column"] > 16]
+#     hits = hits[hits["column"] > 16]
     shape = (len(np.unique(hits["column"])), len(np.unique(hits["row"])))
     distances = np.zeros(shape=(shape[1], shape[0]))
+    peak_widths = np.zeros(shape=(shape[1], shape[0]))
+    pedestal = np.zeros(shape=(shape[1], shape[0]))
+
     for col in range(shape[0]):
+        if col <= 15:
+            distance_guess = guesses[0]
+        else:
+            distance_guess = guesses[1]
         for row in range(shape[1]):
-            selection = np.where(np.logical_and(hits["column"] == col + 1 + 16, hits["row"] == row + 1))
+            selection = np.where(np.logical_and(hits["column"] == col + 1, hits["row"] == row + 1))
             charge = hits["charge"][selection]
             # row before col to preserve matrix dimensions
-            distances[row, col] = fit_spectrum(charge, distance_guess, show_plots=show_plots, col=col + 1 + 16, row=row + 1)
+            pedestal[row, col], distances[row, col], peak_widths[row, col] = fit_spectrum(charge, distance_guess=distance_guess, show_plots=show_plots, col=col + 1, row=row + 1, output_folder=output_folder)
 
-    with tb.open_file(input_file[:-7] + 'calibration.h5', 'w') as out_file:
+    with tb.open_file(input_file[:-7] + 'calibration_w_pedestal.h5', 'w') as out_file:
         out_file.create_array(out_file.root, 'calibration', distances, "Calibration data")
+        out_file.create_array(out_file.root, 'peak_width', peak_widths, "Peak width data")
+        out_file.create_array(out_file.root, 'pedestal', pedestal, "Peak width data")
 
+    plt.clf()
     fig = plt.figure()
-    ax = fig.add_subplot(111)
-    im = ax.imshow(distances, interpolation='nearest', aspect='equal')
-    ax.set_title('Difference between signal and Noise')
-    fig.colorbar(im)    # scale of vertical bar
+    ax1 = fig.add_subplot(121)
+    im1 = ax1.imshow(distances, interpolation='nearest', aspect='equal')
+    ax1.set_title('Difference between signal and noise')
+    fig.colorbar(im1)    # scale of vertical bar
+
+    ax2 = fig.add_subplot(122)
+    im2 = ax2.imshow(peak_widths, interpolation='nearest', aspect='equal')
+    ax2.set_title('Width of signal peak')
+    fig.colorbar(im2)    # scale of vertical bar
     plt.show()
 
-    return distances
+    return distances, peak_widths
 
 
-def create_calibration(calibration_list, energies, output_file, show_plots=False):
+def create_calibration(calibration_list, energies, output_file, gain=1, baseline=False, show_plots=False):
     def line(x, m, b):
         return m * x + b
 
     with tb.open_file(calibration_list[0], 'r') as in_file:
         data = in_file.root.calibration[:]
 
-    slope, offset = np.ones(shape=data.shape), np.zeros(shape=data.shape)
+    slope, offset, slope_err, offset_err = np.ones(shape=data.shape), np.zeros(shape=data.shape), np.zeros(shape=data.shape), np.zeros(shape=data.shape)
     print slope.shape
     data = np.zeros(shape=(len(calibration_list), data.shape[0], data.shape[1]))
     # start plotting here
-    for index in range(len(calibration_list)):
+    for index in range(len(calibration_list[:-1])):
         with tb.open_file(calibration_list[index], 'r') as in_file:
             data[index, :, :] = in_file.root.calibration[:]
 
+    if baseline:
+        with tb.open_file(calibration_list[-1], 'r') as in_file:
+            data[-1, :, :] = in_file.root.pedestal[:]
+
     for col in range(data.shape[2]):
         for row in range(data.shape[1]):
-            adc_u = data[:, row, col]
+            if col < 16:
+                continue
+            adc_u = data[:, row, col] * gain
 
-            popt, _ = curve_fit(line, adc_u, energies, p0=((energies[-1] - energies[0]) / (adc_u[-1] - adc_u[0]), 0.))
+            popt, pcov = curve_fit(line, adc_u, energies, p0=((energies[-1] - energies[0]) / (adc_u[-1] - adc_u[0]), 0.))
             print popt
+            print np.sqrt(np.diag(pcov))
             if show_plots:
                 plt.clf()
                 plt.title('Col %d / Row %d' % (col + 1, row + 1))
-                plt.plot(adc_u, energies, 'bo')
-                plt.plot(np.linspace(0, 25, 5), line(np.linspace(0, 25, 5), *popt), 'r--', label="Fit")
-                plt.show()
+                plt.errorbar(adc_u, energies, xerr=1 * np.ones_like(energies), fmt='b.', label="Fitted peak positons")
+                plt.plot(np.linspace(-5, 55, 5), line(np.linspace(-5, 55, 5), *popt), 'r--', label="Calibration fit")
+                plt.grid()
+                plt.xlim(0, 40)
+                plt.ylim(-10, 30)
+                plt.legend(loc=0)
+#                 plt.show()
             # row before col to preserve matrix dimensions
             slope[row, col], offset[row, col] = popt[0], popt[1]
+            slope_err[row, col], offset_err[row, col] = np.sqrt(np.diag(pcov))[0], np.sqrt(np.diag(pcov))[1]
 
     with tb.open_file(output_file, 'w') as out_file:
         out_file.create_array(out_file.root, 'slope', slope, "Slope data for calibration")
         out_file.create_array(out_file.root, 'offset', offset, "Offset data for calibration")
+        out_file.create_array(out_file.root, 'slope_err', slope_err, "Offset error data for calibration")
+        out_file.create_array(out_file.root, 'offset_err', offset_err, "Offset error data for calibration")
+
 
     return slope, offset
 

@@ -55,7 +55,10 @@ class Tsb01aInterpreter(object):
                     pbar.finish()
 
     def create_hit_table(self, input_file, output_file, threshold=0, start_col=1, calibrate=False, calibration_file=None):
-        hit_dtype = np.dtype([("event_number", "u8"), ("frame", "u1"), ("column", "u2"), ("row", "u2"), ("charge", "i4")])
+        if calibrate:
+            hit_dtype = np.dtype([("event_number", "u8"), ("frame", "u1"), ("column", "u2"), ("row", "u2"), ("charge", "f4")])
+        else:
+            hit_dtype = np.dtype([("event_number", "u8"), ("frame", "u1"), ("column", "u2"), ("row", "u2"), ("charge", "f4")])
         description = np.zeros((1,), dtype=hit_dtype).dtype
 
         logging.info("Start creating hit table")
@@ -103,9 +106,28 @@ class Tsb01aInterpreter(object):
                     start_event += chunk_size
 
         pbar.finish()
+        print np.median(slope[16:, :].reshape(-1))
+
         logging.info("Hit table created")
 
         return
+
+    def shift_columns(self, input_file, output_file, shift):
+        with tb.open_file(input_file, 'r') as in_file:
+            with tb.open_file(output_file, 'w') as out_file:
+                data = in_file.root.Hits[:]
+                description = data.dtype
+                print data
+                data["column"] = data["column"] + shift
+
+                hit_table = out_file.create_table(out_file.root,
+                                                  name="Hits",
+                                                  description=description,
+                                                  title="Hit data",
+                                                  filters=tb.Filters(complib='blosc', complevel=5, fletcher32=False))
+
+                hit_table.append(data)
+                hit_table.flush()
 
 
 # Helper functions that use njit for faster computation
@@ -113,13 +135,7 @@ class Tsb01aInterpreter(object):
 def _mk_img(raw_array, res, col_n, row_n, div):
     n_rows = 12
     n_cols = col_n + 1
-    reset = 10#             col_i, row_i = col_indices[hit_index], row_indices[hit_index]
-#             hits['event_number'][hit_index] = index
-#             hits['frame'][hit_index] = frame
-#             # Col/row start at 1 by convention
-#             hits['column'][hit_index] = col_i + 1
-#             hits['row'][hit_index] = row_i + 1
-#             hits['charge'][hit_index] = amplitudes[col_i, row_i]
+    reset = 10
     delay = 10
     exp = 50
 
@@ -187,7 +203,7 @@ def _get_hit_info(hits, data, start_event, threshold, slope, offset, start_col):
             # Col/row start at 1 by convention
             hits[hit_index]['column'] = col_i + 1
             hits[hit_index]['row'] = row_i + 1
-            hits[hit_index]['charge'] = slope[col_i - start_col, row_i] * amplitudes[col_i, row_i] + offset[col_i - start_col, row_i]
+            hits[hit_index]['charge'] = slope[col_i, row_i] * amplitudes[col_i, row_i] + offset[col_i, row_i]
             hit_index = hit_index + 1
 
     return hit_index
